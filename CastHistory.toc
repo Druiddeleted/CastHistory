@@ -2,7 +2,7 @@
 ## Title: CastHistory
 ## Notes: Horizontal timeline of your recent casts with GCD reference markers.
 ## Author: Druiddeleted
-## Version: 0.1.0-alpha1
+## Version: 0.1.0
 ## SavedVariables: CastHistoryDB
 
 Libs\LibStub\LibStub.lua
