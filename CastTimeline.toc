@@ -1,0 +1,27 @@
+## Interface: 120005
+## Title: CastTimeline
+## Notes: Horizontal timeline of your recent casts with GCD reference markers.
+## Author: Druiddeleted
+## Version: 0.1.0
+## SavedVariables: CastTimelineDB, CastHistoryDB
+
+Libs\LibStub\LibStub.lua
+Libs\LibEditMode\LibEditMode.lua
+Libs\LibEditMode\pools.lua
+Libs\LibEditMode\widgets\button.lua
+Libs\LibEditMode\widgets\checkbox.lua
+Libs\LibEditMode\widgets\colorpicker.lua
+Libs\LibEditMode\widgets\dialog.lua
+Libs\LibEditMode\widgets\divider.lua
+Libs\LibEditMode\widgets\dropdown.lua
+Libs\LibEditMode\widgets\expander.lua
+Libs\LibEditMode\widgets\extension.lua
+Libs\LibEditMode\widgets\slider.lua
+
+src\core.lua
+src\db.lua
+src\tracker.lua
+src\ui.lua
+src\events.lua
+src\options.lua
+src\commands.lua
