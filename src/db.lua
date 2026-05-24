@@ -22,13 +22,6 @@ local defaults = {
 ns.DB = {}
 
 function ns.DB:Init()
-  -- one-time migration from CastHistoryDB
-  if not CastHistoryDB and CastHistoryDB and CastHistoryDB.profile then
-    CastHistoryDB = { profile = {} }
-    for k, v in pairs(CastHistoryDB.profile) do
-      CastHistoryDB.profile[k] = v
-    end
-  end
   CastHistoryDB = CastHistoryDB or {}
   CastHistoryDB.profile = CastHistoryDB.profile or {}
   for k, v in pairs(defaults) do

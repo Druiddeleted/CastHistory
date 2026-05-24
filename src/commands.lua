@@ -8,7 +8,7 @@ end
 
 function ns.Commands:Register()
   SLASH_CASTHISTORY1 = "/casthistory"
-  SLASH_CASTHISTORY2 = "/ct"
+  SLASH_CASTHISTORY2 = "/ch"
   SlashCmdList["CASTHISTORY"] = function(input)
     input = (input or ""):lower():match("^%s*(.-)%s*$")
     if input == "" or input == "config" or input == "options" then
