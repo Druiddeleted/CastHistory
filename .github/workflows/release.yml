@@ -37,7 +37,7 @@ jobs:
       - name: Package & upload
         uses: BigWigsMods/packager@v2
         with:
-          args: -p REPLACE_WITH_CURSEFORGE_PROJECT_ID
+          args: -p 1552600
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
