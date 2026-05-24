@@ -1,4 +1,4 @@
-package-as: CastTimeline
+package-as: CastHistory
 
 # Files/dirs to omit from the published zip.
 ignore:

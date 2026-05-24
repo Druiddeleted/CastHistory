@@ -10,4 +10,4 @@
 - Optional diagonal spell-name labels under icons.
 - Configurable frame strata.
 - LibEditMode integration: drag in `/editmode`, snap to Edit Mode grid, all key settings exposed in the right-click selection dialog.
-- Slash commands: `/casttimeline`, `/ct`, `/ct show|hide|toggle|clear|config`.
+- Slash commands: `/casthistory`, `/ct`, `/ct show|hide|toggle|clear|config`.

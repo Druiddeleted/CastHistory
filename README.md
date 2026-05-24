@@ -1,4 +1,4 @@
-# CastTimeline
+# CastHistory
 
 A horizontal timeline of your recent casts with GCD reference markers. Inspired by the cast-history view in the Details! Streamer plugin.
 
@@ -17,16 +17,16 @@ A horizontal timeline of your recent casts with GCD reference markers. Inspired 
 
 ## Slash commands
 
-- `/casttimeline` or `/ct` — open the config panel
+- `/casthistory` or `/ct` — open the config panel
 - `/ct show` / `/ct hide` / `/ct toggle` — show, hide, or toggle the timeline
 - `/ct clear` — clear the on-screen history
 - `/ct config` — open the options panel
 
-To move the frame: open `/editmode`, click CastTimeline, drag.
+To move the frame: open `/editmode`, click CastHistory, drag.
 
 ## Known limitations
 
-WoW patch 12.0 ("Midnight") restricted addon access to `COMBAT_LOG_EVENT_UNFILTERED`, so auto-attack swings cannot be tracked. CastTimeline shows only spells/abilities that fire `UNIT_SPELLCAST_SUCCEEDED` — which is everything the Details Streamer cast-history reference relied on anyway.
+WoW patch 12.0 ("Midnight") restricted addon access to `COMBAT_LOG_EVENT_UNFILTERED`, so auto-attack swings cannot be tracked. CastHistory shows only spells/abilities that fire `UNIT_SPELLCAST_SUCCEEDED` — which is everything the Details Streamer cast-history reference relied on anyway.
 
 ## License
 

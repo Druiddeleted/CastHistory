@@ -49,14 +49,14 @@ end
 function ns.UI:Build()
   local p = ns.DB.profile
 
-  local f = CreateFrame("Frame", "CastTimelineFrame", UIParent, "BackdropTemplate")
+  local f = CreateFrame("Frame", "CastHistoryFrame", UIParent, "BackdropTemplate")
   local w, h = self:CalcSize()
   f:SetSize(w, h)
   f:SetPoint(p.point, UIParent, p.relPoint, p.x, p.y)
   f:SetFrameStrata(p.strata or "HIGH")
   f:SetAlpha(p.alpha)
   f:SetClampedToScreen(true)
-  f.editModeName = "CastTimeline"
+  f.editModeName = "CastHistory"
 
   applyBackdrop(f, p.background)
 
@@ -93,7 +93,7 @@ function ns.UI:Build()
       point = p.point,
       x = p.x,
       y = p.y,
-    }, "CastTimeline")
+    }, "CastHistory")
 
     local function getter(key) return function() return ns.DB.profile[key] end end
     local function setter(key, after)

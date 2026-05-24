@@ -34,11 +34,11 @@ end
 
 function ns.Options:Register()
   local panel = CreateFrame("Frame")
-  panel.name = "CastTimeline"
+  panel.name = "CastHistory"
 
   local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
   title:SetPoint("TOPLEFT", 16, -16)
-  title:SetText("CastTimeline")
+  title:SetText("CastHistory")
 
   local desc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
   desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
@@ -66,7 +66,7 @@ function ns.Options:Register()
   local growthLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
   growthLabel:SetPoint("TOPLEFT", cbNames, "BOTTOMLEFT", 0, -16)
   growthLabel:SetText("Growth direction:")
-  local growthDD = CreateFrame("Frame", "CastTimelineGrowthDropdown", panel, "UIDropDownMenuTemplate")
+  local growthDD = CreateFrame("Frame", "CastHistoryGrowthDropdown", panel, "UIDropDownMenuTemplate")
   growthDD:SetPoint("TOPLEFT", growthLabel, "BOTTOMLEFT", -16, -4)
   local growths = { "RIGHT", "LEFT", "UP", "DOWN" }
   local function setGrowth(value)
@@ -89,7 +89,7 @@ function ns.Options:Register()
   local strataLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
   strataLabel:SetPoint("TOPLEFT", growthDD, "BOTTOMLEFT", 16, -12)
   strataLabel:SetText("Frame strata:")
-  local strataDD = CreateFrame("Frame", "CastTimelineStrataDropdown", panel, "UIDropDownMenuTemplate")
+  local strataDD = CreateFrame("Frame", "CastHistoryStrataDropdown", panel, "UIDropDownMenuTemplate")
   strataDD:SetPoint("TOPLEFT", strataLabel, "BOTTOMLEFT", -16, -4)
   local stratas = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
   local function setStrata(value)
@@ -123,9 +123,9 @@ function ns.Options:Register()
 
   local cbDebug = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
   cbDebug.Text:SetText("Debug logging (writes events to SavedVariables)")
-  cbDebug:SetChecked(CastTimelineDB.debug)
+  cbDebug:SetChecked(CastHistoryDB.debug)
   cbDebug:SetScript("OnClick", function(self)
-    CastTimelineDB.debug = self:GetChecked() and true or false
+    CastHistoryDB.debug = self:GetChecked() and true or false
   end)
   cbDebug:SetPoint("TOPLEFT", sAlpha, "BOTTOMLEFT", -16, -24)
 
@@ -143,7 +143,7 @@ function ns.Options:Register()
   end)
 
   if Settings and Settings.RegisterCanvasLayoutCategory then
-    local category = Settings.RegisterCanvasLayoutCategory(panel, "CastTimeline")
+    local category = Settings.RegisterCanvasLayoutCategory(panel, "CastHistory")
     Settings.RegisterAddOnCategory(category)
     self.category = category
   elseif InterfaceOptions_AddCategory then

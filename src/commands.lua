@@ -3,13 +3,13 @@ local _, ns = ...
 ns.Commands = {}
 
 local function print_(msg)
-  DEFAULT_CHAT_FRAME:AddMessage("|cff7ec0eeCastTimeline|r: " .. msg)
+  DEFAULT_CHAT_FRAME:AddMessage("|cff7ec0eeCastHistory|r: " .. msg)
 end
 
 function ns.Commands:Register()
-  SLASH_CASTTIMELINE1 = "/casttimeline"
-  SLASH_CASTTIMELINE2 = "/ct"
-  SlashCmdList["CASTTIMELINE"] = function(input)
+  SLASH_CASTHISTORY1 = "/casthistory"
+  SLASH_CASTHISTORY2 = "/ct"
+  SlashCmdList["CASTHISTORY"] = function(input)
     input = (input or ""):lower():match("^%s*(.-)%s*$")
     if input == "" or input == "config" or input == "options" then
       ns.Options:Open()
@@ -22,13 +22,13 @@ function ns.Commands:Register()
     elseif input == "clear" then
       ns.Tracker:Clear()
     elseif input == "debug on" then
-      CastTimelineDB.debug = true; print_("debug logging ON")
+      CastHistoryDB.debug = true; print_("debug logging ON")
     elseif input == "debug off" then
-      CastTimelineDB.debug = false; print_("debug logging OFF")
+      CastHistoryDB.debug = false; print_("debug logging OFF")
     elseif input == "debug clear" then
-      wipe(CastTimelineDB.log); print_("log cleared")
+      wipe(CastHistoryDB.log); print_("log cleared")
     elseif input == "debug dump" then
-      print_("log has " .. #CastTimelineDB.log .. " entries (saved to SavedVariables on logout/reload)")
+      print_("log has " .. #CastHistoryDB.log .. " entries (saved to SavedVariables on logout/reload)")
     else
       print_("commands: show, hide, toggle, clear, config (move via /editmode)")
     end

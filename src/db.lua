@@ -23,21 +23,21 @@ ns.DB = {}
 
 function ns.DB:Init()
   -- one-time migration from CastHistoryDB
-  if not CastTimelineDB and CastHistoryDB and CastHistoryDB.profile then
-    CastTimelineDB = { profile = {} }
+  if not CastHistoryDB and CastHistoryDB and CastHistoryDB.profile then
+    CastHistoryDB = { profile = {} }
     for k, v in pairs(CastHistoryDB.profile) do
-      CastTimelineDB.profile[k] = v
+      CastHistoryDB.profile[k] = v
     end
   end
-  CastTimelineDB = CastTimelineDB or {}
-  CastTimelineDB.profile = CastTimelineDB.profile or {}
+  CastHistoryDB = CastHistoryDB or {}
+  CastHistoryDB.profile = CastHistoryDB.profile or {}
   for k, v in pairs(defaults) do
-    if CastTimelineDB.profile[k] == nil then
-      CastTimelineDB.profile[k] = v
+    if CastHistoryDB.profile[k] == nil then
+      CastHistoryDB.profile[k] = v
     end
   end
-  CastTimelineDB.debug = CastTimelineDB.debug or false
-  CastTimelineDB.log = CastTimelineDB.log or {}
-  self.profile = CastTimelineDB.profile
+  CastHistoryDB.debug = CastHistoryDB.debug or false
+  CastHistoryDB.log = CastHistoryDB.log or {}
+  self.profile = CastHistoryDB.profile
   self.defaults = defaults
 end
