@@ -21,11 +21,21 @@ function ns.Tracker:Add(spellID)
   if last and last.name == info.name and (GetTime() - last.t) < 0.25 then
     return
   end
+  -- Classify on/off-GCD using the spell DB. GetSpellBaseCooldown's second
+  -- return is the spell's template GCD in ms (typically 1500 for on-GCD
+  -- spells, 0 for off-GCD). This is static DBC data, so it doesn't depend
+  -- on haste, latency, cast time, or whether the GCD is currently rolling.
+  -- Cast-time spells (mounts, hardcasts) are forced on-GCD: mounts flag as
+  -- off-GCD in DBC (they use a shared mount cooldown), but visually anything
+  -- with a cast bar belongs on the main row.
+  local _, gcdMS = GetSpellBaseCooldown(spellID)
+  local onGCD = (gcdMS or 0) > 0 or (info.castTime or 0) > 0
   table.insert(self.casts, {
     spellID = spellID,
     name = info.name,
     icon = info.iconID,
     t = GetTime(),
+    onGCD = onGCD,
   })
   local max = ns.DB.profile.maxIcons + 5
   while #self.casts > max do

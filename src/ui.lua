@@ -300,7 +300,11 @@ function ns.UI:Refresh()
       btn:SetSize(p.iconSize, p.iconSize)
       btn.tex:SetTexture(cast.icon)
       local agePx = age * pps
-      local stack = 0
+      -- On-GCD spells live on row 0 (the "main" timeline). Off-GCD spells
+      -- (trinkets, racials, etc.) start one row above so they never sit on
+      -- the GCD line, and stack further up only if they collide with each
+      -- other in time.
+      local stack = cast.onGCD and 0 or 1
       for _, prev in ipairs(placed) do
         if math.abs(prev.px - agePx) < threshold and prev.stack == stack then
           stack = stack + 1
