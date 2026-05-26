@@ -7,9 +7,16 @@ f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 f:RegisterEvent("PLAYER_REGEN_ENABLED")
 f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 f:RegisterUnitEvent("UNIT_AURA", "player")
+f:RegisterEvent("PLAYER_ENTERING_WORLD")
 
 function ns.Events:Register()
   f:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
+    if event == "PLAYER_ENTERING_WORLD" then
+      -- Suppress the flood of passive/equipment UNIT_SPELLCAST_SUCCEEDED
+      -- events the client replays right after entering the world.
+      ns.Tracker.suppressUntil = GetTime() + 1.5
+      return
+    end
     if event == "UNIT_SPELLCAST_SUCCEEDED" then
       if CastHistoryDB.debug then
         local info = C_Spell.GetSpellInfo(spellID)

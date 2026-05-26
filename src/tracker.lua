@@ -5,13 +5,18 @@ ns.Tracker = {
 }
 
 function ns.Tracker:Add(spellID)
+  -- After PLAYER_ENTERING_WORLD, WoW replays UNIT_SPELLCAST_SUCCEEDED for
+  -- every passive/equipment/tabard spell on the player. Drop that flood.
+  if GetTime() < (self.suppressUntil or 0) then return end
   local info = C_Spell.GetSpellInfo(spellID)
   if not info then return end
-  -- Skip Blizzard's internal placeholder spells. The "[DNT]" prefix marks
-  -- system/environment spells that fire as UNIT_SPELLCAST_SUCCEEDED on the
-  -- player (delve altars, material drops, exit sequences, etc.) but aren't
-  -- player-initiated casts.
-  if info.name and info.name:sub(1, 5) == "[DNT]" then return end
+  -- Skip Blizzard's internal placeholder spells. "DNT" ("do not translate")
+  -- marks system/environment spells that fire as UNIT_SPELLCAST_SUCCEEDED on
+  -- the player but aren't player-initiated casts. Marker appears as either
+  -- "[DNT]" prefix or "(DNT)" suffix depending on the spell.
+  if info.name and (info.name:find("%(DNT%)") or info.name:sub(1, 5) == "[DNT]") then
+    return
+  end
   local last = self.casts[#self.casts]
   if last and last.name == info.name and (GetTime() - last.t) < 0.25 then
     return
