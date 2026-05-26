@@ -5,10 +5,14 @@ ns.Events = {}
 local f = CreateFrame("Frame", "CTSpellEvents")
 f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 f:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
+f:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
 f:RegisterEvent("PLAYER_REGEN_ENABLED")
 f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 f:RegisterUnitEvent("UNIT_AURA", "player")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
+
+local activeChannelName = nil
+local channelNameValidUntil = 0
 
 function ns.Events:Register()
   f:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
@@ -19,15 +23,27 @@ function ns.Events:Register()
       return
     end
     if event == "UNIT_SPELLCAST_CHANNEL_START" then
-      -- Channels are logged once at start; per-tick SUCCEEDED is filtered.
+      local info = C_Spell.GetSpellInfo(spellID)
+      activeChannelName = info and info.name
+      channelNameValidUntil = math.huge
       ns.Tracker:Add(spellID)
       return
     end
+    if event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+      -- Keep the channel name remembered briefly: late ticks can fire
+      -- SUCCEEDED after CHANNEL_STOP (UnitChannelInfo is already nil) and
+      -- would otherwise sneak through.
+      channelNameValidUntil = GetTime() + 0.5
+      return
+    end
     if event == "UNIT_SPELLCAST_SUCCEEDED" then
-      -- Channels fire UNIT_SPELLCAST_SUCCEEDED for every tick (and once for
-      -- the initial cast). If the player is currently channeling, skip the
-      -- SUCCEEDED entirely — CHANNEL_START already logged the cast.
-      if UnitChannelInfo("player") then return end
+      -- Filter ticks of the active channel by name match. Spells cast
+      -- alongside a channel (e.g. Vivify during Soothing Mist) have a
+      -- different name and pass through normally.
+      if activeChannelName and GetTime() < channelNameValidUntil then
+        local info = C_Spell.GetSpellInfo(spellID)
+        if info and info.name == activeChannelName then return end
+      end
       ns.Tracker:Add(spellID)
       if CastHistoryDB.debug then
         local info = C_Spell.GetSpellInfo(spellID)

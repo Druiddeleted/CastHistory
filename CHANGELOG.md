@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4
+
+- Fix channeled spells (Spinning Crane Kick, etc.) occasionally showing a late tick after the channel ended.
+- Allow free-cast spells during a channel (Vivify / Enveloping Mist / Sheilun's Gift during Soothing Mist) to show up on the timeline instead of being filtered out as channel ticks.
+- Force Skyriding abilities (Skyward Ascent, Surge Forward, Whirling Surge, Take to the Skies, Bronze Timelock, Land) onto the main row even though the spell DB flags them as off-GCD.
+
 ## 0.1.3
 
 - Split the timeline into two rows: on-GCD casts stay on the main row, off-GCD abilities (trinkets, racials, Anti-Magic Shell, etc.) stack one row above so they never sit on the GCD line.
