@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5-alpha1
+
+- Remember the timeline's position per Edit Mode layout, so switching HUD profiles now moves CastHistory to wherever you placed it in that layout. Existing positions are preserved — a layout only diverges once you reposition the frame while it's active. "Reset position" now resets only the active layout.
+- Stop erroring on haste reads now that `UnitSpellHaste` can return a protected (Secret) value in Patch 12.0; the haste-adjusted GCD markers keep their last known spacing instead.
+- Skip per-frame work when the timeline is empty and reuse layout scratch state, to cut idle CPU and garbage collection.
+
 ## 0.1.4
 
 - Fix channeled spells (Spinning Crane Kick, etc.) occasionally showing a late tick after the channel ended.

@@ -68,12 +68,28 @@ end
 
 ns.Tracker.cachedHastedGCD = 1.5
 
-function ns.Tracker:RefreshHastedGCD()
-  if InCombatLockdown() then return end
+-- Computed in isolation so we can pcall it: as of Patch 12.0 ("Midnight"),
+-- UnitSpellHaste returns a Secret Value once our execution is tainted, and any
+-- arithmetic on a Secret throws a Lua error. pcall is the sanctioned way to
+-- detect that (a thrown error == Secret).
+local function computeHastedGCD()
   local haste = UnitSpellHaste("player") or 0
   local gcd = 1.5 / (1 + haste / 100)
   if gcd < 0.75 then gcd = 0.75 end
+  return gcd
+end
+
+function ns.Tracker:RefreshHastedGCD()
+  if InCombatLockdown() then return end
+  -- When haste is Secret we can't read it, so keep the last good GCD. The
+  -- markers are cosmetic, so a slightly stale spacing is an acceptable
+  -- fallback and far better than erroring on every UNIT_AURA.
+  local ok, gcd = pcall(computeHastedGCD)
+  if not ok then return end
   self.cachedHastedGCD = gcd
+  -- The hasted-GCD marker spacing depends on this value, so re-place the
+  -- markers now rather than recomputing them every frame in UI:Refresh.
+  if ns.UI and ns.UI.frame then ns.UI:LayoutGCDMarkers() end
 end
 
 function ns.Tracker:GetHastedGCD()

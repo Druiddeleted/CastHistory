@@ -134,12 +134,13 @@ function ns.Options:Register()
   reset:SetText("Reset position")
   reset:SetPoint("TOPLEFT", cbDebug, "BOTTOMLEFT", 16, -16)
   reset:SetScript("OnClick", function()
-    ns.DB.profile.point = ns.DB.defaults.point
-    ns.DB.profile.relPoint = ns.DB.defaults.relPoint
-    ns.DB.profile.x = ns.DB.defaults.x
-    ns.DB.profile.y = ns.DB.defaults.y
-    ns.UI.frame:ClearAllPoints()
-    ns.UI.frame:SetPoint(ns.DB.profile.point, UIParent, ns.DB.profile.relPoint, ns.DB.profile.x, ns.DB.profile.y)
+    -- Reset the active Edit Mode layout's position to default; other HUD
+    -- profiles keep their own saved positions.
+    local lib = LibStub and LibStub("LibEditMode", true)
+    local layoutName = lib and lib:GetActiveLayoutName()
+    local d = ns.DB.defaults
+    ns.DB:SetPosition(layoutName, d.point, d.relPoint, d.x, d.y)
+    ns.UI:ApplyPosition()
   end)
 
   if Settings and Settings.RegisterCanvasLayoutCategory then

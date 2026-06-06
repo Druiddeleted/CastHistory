@@ -49,10 +49,17 @@ end
 function ns.UI:Build()
   local p = ns.DB.profile
 
+  local lib = LibStub and LibStub("LibEditMode", true)
+
   local f = CreateFrame("Frame", "CastHistoryFrame", UIParent, "BackdropTemplate")
   local w, h = self:CalcSize()
   f:SetSize(w, h)
-  f:SetPoint(p.point, UIParent, p.relPoint, p.x, p.y)
+  -- Position from the active Edit Mode layout. The layout may not be known yet
+  -- at login (LibEditMode loads it from the server slightly later); the 'layout'
+  -- callback registered below repositions us once it is, and on every switch.
+  local initLayout = lib and lib:GetActiveLayoutName()
+  local point, relPoint, x, y = ns.DB:GetPosition(initLayout)
+  f:SetPoint(point, UIParent, relPoint, x, y)
   f:SetFrameStrata(p.strata or "HIGH")
   f:SetAlpha(p.alpha)
   f:SetClampedToScreen(true)
@@ -60,7 +67,7 @@ function ns.UI:Build()
 
   applyBackdrop(f, p.background)
 
-  local function snapToGrid(frame)
+  local function snapToGrid(frame, layoutName)
     if not EditModeManagerFrame or not EditModeManagerFrame.IsSnapEnabled then return end
     if not EditModeManagerFrame:IsSnapEnabled() then return end
     local grid = EditModeManagerFrame.Grid
@@ -75,25 +82,32 @@ function ns.UI:Build()
     local snappedY = math.floor(offY / spacing + 0.5) * spacing
     frame:ClearAllPoints()
     frame:SetPoint("CENTER", UIParent, "CENTER", snappedX, snappedY)
-    ns.DB.profile.point = "CENTER"
-    ns.DB.profile.relPoint = "CENTER"
-    ns.DB.profile.x = snappedX
-    ns.DB.profile.y = snappedY
+    ns.DB:SetPosition(layoutName, "CENTER", "CENTER", snappedX, snappedY)
   end
 
-  local lib = LibStub and LibStub("LibEditMode", true)
   if lib then
-    lib:AddFrame(f, function(frame, _layout, point, x, y)
-      ns.DB.profile.point = point
-      ns.DB.profile.relPoint = point
-      ns.DB.profile.x = x
-      ns.DB.profile.y = y
-      snapToGrid(frame)
+    -- layoutName is the active Edit Mode layout, so each HUD profile records its
+    -- own position; layouts left untouched keep falling back to the baseline.
+    lib:AddFrame(f, function(frame, layoutName, point, x, y)
+      ns.DB:SetPosition(layoutName, point, point, x, y)
+      snapToGrid(frame, layoutName)
     end, {
-      point = p.point,
-      x = p.x,
-      y = p.y,
+      point = ns.DB.defaults.point,
+      x = ns.DB.defaults.x,
+      y = ns.DB.defaults.y,
     }, "CastHistory")
+
+    -- Reposition whenever the Edit Mode layout changes. This also fires once at
+    -- login as soon as the active layout is known.
+    lib:RegisterCallback("layout", function()
+      ns.UI:ApplyPosition()
+    end)
+    lib:RegisterCallback("rename", function(oldName, newName)
+      ns.DB:RenameLayout(oldName, newName)
+    end)
+    lib:RegisterCallback("delete", function(name)
+      ns.DB:DeleteLayout(name)
+    end)
 
     local function getter(key) return function() return ns.DB.profile[key] end end
     local function setter(key, after)
@@ -181,12 +195,12 @@ function ns.UI:Build()
       {
         text = "Reset position",
         click = function()
-          ns.DB.profile.point = ns.DB.defaults.point
-          ns.DB.profile.relPoint = ns.DB.defaults.relPoint
-          ns.DB.profile.x = ns.DB.defaults.x
-          ns.DB.profile.y = ns.DB.defaults.y
-          f:ClearAllPoints()
-          f:SetPoint(ns.DB.profile.point, UIParent, ns.DB.profile.relPoint, ns.DB.profile.x, ns.DB.profile.y)
+          -- Reset only the active layout's position so other HUD profiles keep
+          -- theirs.
+          local layoutName = lib:GetActiveLayoutName()
+          local d = ns.DB.defaults
+          ns.DB:SetPosition(layoutName, d.point, d.relPoint, d.x, d.y)
+          ns.UI:ApplyPosition()
         end,
       },
     })
@@ -197,11 +211,19 @@ function ns.UI:Build()
 
   f.gcdTextures = {}
   f.icons = {}
+  -- Reused across frames so the per-frame Refresh doesn't allocate: a scratch
+  -- list for icon collision-stacking, and the count of icons shown last frame.
+  self.placed = {}
+  self.shownIcons = 0
 
   f:SetScript("OnUpdate", function() ns.UI:Refresh() end)
 
   self.frame = f
   self:ApplyLayout()
+  -- Settle on the active layout's position now that self.frame exists: AddFrame
+  -- above can make LibEditMode learn the active layout mid-Build, when the
+  -- 'layout' callback would have no-op'd because self.frame wasn't set yet.
+  self:ApplyPosition()
 end
 
 function ns.UI:GetIcon(i)
@@ -254,26 +276,27 @@ local function placeIcon(btn, d, p, agePx, stackIdx)
   end
 end
 
-function ns.UI:Refresh()
+-- Lay out the GCD reference markers. These sit at fixed offsets from the
+-- "now" anchor (secs * pixels-per-second) and so DON'T move as time passes --
+-- the only thing that changes their spacing is the haste-adjusted GCD or a
+-- layout setting. So this runs from ApplyLayout (settings change) and from
+-- Tracker:RefreshHastedGCD (haste change), NOT from the per-frame Refresh.
+function ns.UI:LayoutGCDMarkers()
   local f = self.frame
-  if not f:IsShown() then return end
+  if not f then return end
   local p = ns.DB.profile
   local d = dir()
-  local now = GetTime()
   local pps = pxPerSec()
-
-  ns.Tracker:Prune(p.windowSeconds)
 
   local gcdIdx = 1
   if p.showBaseGCD then
-    local step = 1.5
-    local secs = step
+    local secs = 1.5
     while secs <= p.windowSeconds do
       local tex = self:GetGCDTex(gcdIdx)
       tex:SetColorTexture(0.6, 0.6, 0.6, 0.45)
       placeGCDMarker(tex, d, p, secs * pps)
       gcdIdx = gcdIdx + 1
-      secs = secs + step
+      secs = secs + 1.5
     end
   end
   if p.showHastedGCD then
@@ -288,11 +311,33 @@ function ns.UI:Refresh()
     end
   end
   for i = gcdIdx, #f.gcdTextures do f.gcdTextures[i]:Hide() end
+end
+
+function ns.UI:Refresh()
+  local f = self.frame
+  if not f:IsShown() then return end
+  local p = ns.DB.profile
+  local d = dir()
+  local now = GetTime()
+  local pps = pxPerSec()
+
+  ns.Tracker:Prune(p.windowSeconds)
+
+  -- Idle fast-path: with nothing in the window there are no icons to animate,
+  -- so skip all per-frame work. GCD markers are laid out elsewhere (see
+  -- LayoutGCDMarkers) and stay put, so we only clear icons shown last frame.
+  local casts = ns.Tracker.casts
+  if #casts == 0 then
+    for i = 1, self.shownIcons do f.icons[i]:Hide() end
+    self.shownIcons = 0
+    return
+  end
 
   local visible = 0
-  local placed = {}
+  local placed = self.placed
+  local placedN = 0
   local threshold = p.iconSize * 0.6
-  for _, cast in ipairs(ns.Tracker.casts) do
+  for _, cast in ipairs(casts) do
     local age = now - cast.t
     if age <= p.windowSeconds and visible < p.maxIcons then
       visible = visible + 1
@@ -305,12 +350,19 @@ function ns.UI:Refresh()
       -- the GCD line, and stack further up only if they collide with each
       -- other in time.
       local stack = cast.onGCD and 0 or 1
-      for _, prev in ipairs(placed) do
+      for j = 1, placedN do
+        local prev = placed[j]
         if math.abs(prev.px - agePx) < threshold and prev.stack == stack then
           stack = stack + 1
         end
       end
-      table.insert(placed, { px = agePx, stack = stack })
+      -- Reuse the scratch slot instead of allocating a fresh subtable: this
+      -- runs every frame, so per-frame allocations would churn the GC.
+      placedN = placedN + 1
+      local slot = placed[placedN]
+      if not slot then slot = {}; placed[placedN] = slot end
+      slot.px = agePx
+      slot.stack = stack
       placeIcon(btn, d, p, agePx, stack)
       if p.showSpellNames and d.axis == "H" then
         btn.label:SetText(cast.name)
@@ -321,7 +373,22 @@ function ns.UI:Refresh()
       btn:Show()
     end
   end
-  for i = visible + 1, #f.icons do f.icons[i]:Hide() end
+  -- Only hide icons that were actually shown last frame (anything above that
+  -- high-water mark is already hidden), then record this frame's count.
+  for i = visible + 1, self.shownIcons do f.icons[i]:Hide() end
+  self.shownIcons = visible
+end
+
+-- Move the frame to the position saved for the active Edit Mode layout (falling
+-- back to the baseline for layouts that have never been positioned). Called at
+-- login and on every layout switch via LibEditMode's 'layout' callback.
+function ns.UI:ApplyPosition()
+  if not self.frame then return end
+  local lib = LibStub and LibStub("LibEditMode", true)
+  local layoutName = lib and lib:GetActiveLayoutName()
+  local point, relPoint, x, y = ns.DB:GetPosition(layoutName)
+  self.frame:ClearAllPoints()
+  self.frame:SetPoint(point, UIParent, relPoint, x, y)
 end
 
 function ns.UI:ApplyLayout()
@@ -342,6 +409,8 @@ function ns.UI:ApplyLayout()
     self.frame.nowLine:SetSize(p.iconSize + 4, 1)
     self.frame.nowLine:SetPoint(d.nowAnchor, self.frame, d.nowAnchor, 0, 0)
   end
+
+  self:LayoutGCDMarkers()
 end
 
 function ns.UI:Toggle()
