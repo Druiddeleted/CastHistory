@@ -16,6 +16,14 @@ local FORCE_ON_GCD = {
   [425951] = true, -- Land
 }
 
+-- Strip the " Off-Hand" suffix WoW appends to the off-hand swing of a
+-- dual-wield strike (e.g. "Odyn's Fury Off-Hand") so it collapses into the
+-- main-hand cast from the same button press.
+local function baseName(name)
+  if not name then return name end
+  return (name:gsub(" Off%-Hand$", ""))
+end
+
 function ns.Tracker:Add(spellID)
   -- After PLAYER_ENTERING_WORLD, WoW replays UNIT_SPELLCAST_SUCCEEDED for
   -- every passive/equipment/tabard spell on the player. Drop that flood.
@@ -29,10 +37,40 @@ function ns.Tracker:Add(spellID)
   if info.name and (info.name:find("%(DNT%)") or info.name:sub(1, 5) == "[DNT]") then
     return
   end
-  local last = self.casts[#self.casts]
-  if last and last.name == info.name and (GetTime() - last.t) < 0.25 then
-    return
+  local now = GetTime()
+  local bname = baseName(info.name)
+
+  -- Multi-strike collapse. A single button press of many melee abilities — Fury
+  -- warrior most visibly (Rampage and Odyn's Fury each fire five strikes,
+  -- Whirlwind/Raging Blow/Execute several), plus off-GCD ones like Charge and
+  -- Heroic Leap — produces several UNIT_SPELLCAST_SUCCEEDED events: main- and
+  -- off-hand swings and multi-hit strikes, each a *distinct* spellID but sharing
+  -- one display name, arriving across the ability's animation (up to ~1.3s).
+  --
+  -- These can't be separated from a genuine re-press by timing alone: the strike
+  -- span is about one GCD, the same spacing as pressing the spell again. The
+  -- reliable signal is the spellID. The spell the action button actually casts —
+  -- the "primary" — fires first and is the SAME spellID every press; the extra
+  -- strikes carry other spellIDs. So within a short window we fold a same-named
+  -- cast into the most recent same-named cast when its spellID differs (an extra
+  -- strike), but keep it when the spellID matches (a real re-press), with a tight
+  -- same-spellID guard for the occasional instant duplicate SUCCEEDED.
+  for i = #self.casts, 1, -1 do
+    local c = self.casts[i]
+    local age = now - (c.t or 0)
+    -- Casts are time-ordered; nothing older than a strike window can belong to
+    -- the current press, so stop scanning.
+    if age > 1.5 then break end
+    if c.baseName == bname then
+      if c.spellID ~= spellID then
+        return            -- extra strike of the same press
+      elseif age < 0.25 then
+        return            -- instant duplicate SUCCEEDED of the same spell
+      end
+      break               -- genuine re-press of the same button → keep it
+    end
   end
+
   -- Classify on/off-GCD using the spell DB. GetSpellBaseCooldown's second
   -- return is the spell's template GCD in ms (typically 1500 for on-GCD
   -- spells, 0 for off-GCD). This is static DBC data, so it doesn't depend
@@ -42,11 +80,13 @@ function ns.Tracker:Add(spellID)
   -- with a cast bar belongs on the main row.
   local _, gcdMS = GetSpellBaseCooldown(spellID)
   local onGCD = (gcdMS or 0) > 0 or (info.castTime or 0) > 0 or FORCE_ON_GCD[spellID] == true
+
   table.insert(self.casts, {
     spellID = spellID,
     name = info.name,
+    baseName = bname,
     icon = info.iconID,
-    t = GetTime(),
+    t = now,
     onGCD = onGCD,
   })
   local max = ns.DB.profile.maxIcons + 5

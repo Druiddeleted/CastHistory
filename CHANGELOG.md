@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.6
+
+- Collapse multi-strike abilities to a single icon per button press. Melee abilities that hit with both weapons or strike several times — Fury warrior's Rampage, Odyn's Fury, Whirlwind, Raging Blow, and Execute, plus off-GCD ones like Charge and Heroic Leap — each fire several `UNIT_SPELLCAST_SUCCEEDED` events, so one press was showing up as several icons. CastHistory now folds the extra strikes into the cast you actually pressed, while still showing genuine re-presses separately.
+
 ## 0.1.5
 
 - Remember the timeline's position per Edit Mode layout, so switching HUD profiles now moves CastHistory to wherever you placed it in that layout. Existing positions are preserved — a layout only diverges once you reposition the frame while it's active. "Reset position" now resets only the active layout.
