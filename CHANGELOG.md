@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7-alpha5
+
+- Now targets the current client. The `## Interface` number still said 12.0.5, two patches behind 12.1.0, so the addon showed as out of date in the in-game list and was published against the wrong game version on CurseForge. No functional change.
+
 ## 0.1.7-alpha4
 
 - Fix: abilities you pressed during Bladestorm (Storm Bolt, and anything else) were being hidden. alpha3 treated any cast arriving in the same frame as an effect's tick as game-granted, but the server frequently delivers a genuine press in the same frame as a tick, so real abilities disappeared.
