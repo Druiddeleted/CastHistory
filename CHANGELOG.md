@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7-alpha4
+
+- Fix: abilities you pressed during Bladestorm (Storm Bolt, and anything else) were being hidden. alpha3 treated any cast arriving in the same frame as an effect's tick as game-granted, but the server frequently delivers a genuine press in the same frame as a tick, so real abilities disappeared.
+- A cast is now only treated as granted when it lands in a tick's frame **and** it's an on-GCD ability that didn't start the global cooldown. Pressing an on-GCD ability always starts the GCD; a cast the game grants you doesn't. Against a log of real play this drops all 45 Unhinged-granted Mortal Strikes while keeping every one of the 33 you pressed — including the Mortal Strike and the Storm Bolt that happened to land in the same frame as a tick.
+
 ## 0.1.7-alpha3
 
 - Fix: abilities the game casts *for* you no longer appear as though you pressed them. The clearest case is Arms' Unhinged talent, which makes Bladestorm periodically cast Mortal Strike — those showed up as a row of Mortal Strike icons during a Bladestorm you couldn't have cast anything in. They report the same spell ID and the same "pressed" cast GUID as a real Mortal Strike, so nothing about the event itself distinguishes them; what gives them away is that each one arrives in the same frame as a Bladestorm tick. Across a 500-event log, all 48 granted strikes shared a frame with a tick and none of the 32 you actually pressed did.

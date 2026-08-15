@@ -41,6 +41,12 @@ local LOGIN_SUPPRESS = 1.5
 local BURST_LIMIT = 12
 local REPLAY_WATCH = 60
 
+-- Pressing an on-GCD ability starts the global cooldown; a cast the game grants
+-- you does not. Measured across a log of real play, a press reports the GCD
+-- having started within a fraction of a second, while a granted cast reports
+-- either no GCD running at all or one started by an earlier press.
+local GCD_FRESH = 0.35
+
 -- Spells the DBC flags as off-GCD but that visually belong on the main row.
 -- Skyriding skills don't share the player GCD but they're the player's
 -- primary active inputs while mounted.
@@ -174,7 +180,7 @@ end
 function Intake:IsReplayBatch()
   self.frameCount = self.frameCount + 1
   if self.frameCount == BURST_LIMIT then
-    self:DropFrame(nil)
+    self:DropFrame()
   end
   return self.frameCount >= BURST_LIMIT
 end
@@ -190,21 +196,34 @@ end
 -- timeline -- rather than to triggered events generally. Execute's paired
 -- second event is also "triggered" but it *creates* its cast, so a real off-GCD
 -- press landing in that same frame is left alone.
-function Intake:NoteTick(bname)
-  self.frameTickName = bname
-  -- The granted cast can arrive before the tick that exposes it, so anything
-  -- else recorded this frame goes too.
-  self:DropFrame(bname)
+-- Did the player start the global cooldown just now? Only meaningful for
+-- on-GCD spells: an off-GCD press leaves the GCD alone and so looks identical
+-- to a granted cast here.
+function Intake:GCDFresh()
+  local elapsed, duration = self.env.gcdState()
+  return duration > 0 and elapsed <= GCD_FRESH
 end
 
--- Remove casts created in the current frame, except any named `keep`. Matched
--- on the frame stamp rather than on a list index, because the max-icons trim
--- removes from the front and shifts every index under us.
-function Intake:DropFrame(keep)
+function Intake:NoteTick(bname)
+  self.frameTickName = bname
+  -- The granted cast can arrive before the tick that exposes it, so re-examine
+  -- what this frame already recorded.
   for i = #self.casts, 1, -1 do
     local c = self.casts[i]
     if c.frame ~= self.frameTime then break end
-    if c.baseName ~= keep then table.remove(self.casts, i) end
+    if c.baseName ~= bname and c.onGCD and not c.gcdFresh then
+      table.remove(self.casts, i)
+    end
+  end
+end
+
+-- Everything recorded in the current frame, for the replay batch. Matched on the
+-- frame stamp rather than on a list index, because the max-icons trim removes
+-- from the front and shifts every index under us.
+function Intake:DropFrame()
+  for i = #self.casts, 1, -1 do
+    if self.casts[i].frame ~= self.frameTime then break end
+    table.remove(self.casts, i)
   end
 end
 
@@ -251,7 +270,6 @@ function Intake:Record(spellID, castGUID)
   -- train keeps sliding its own window forward without extending the window a
   -- genuine re-press is measured against.
   local press = isPress(castGUID)
-  if press and self.frameTickName and self.frameTickName ~= bname then return end
   -- An on-GCD spell can't be pressed again inside its own GCD, so a same-spellID
   -- repeat that fast is a tick, not a press. Off-GCD spells with charges can
   -- genuinely double-tap that fast, but only presses take the branch above.
@@ -265,6 +283,17 @@ function Intake:Record(spellID, castGUID)
   -- visually anything with a cast bar belongs on the main row.
   local gcdMS = self.env.baseGCD(spellID)
   local onGCD = (gcdMS or 0) > 0 or (info.castTime or 0) > 0 or FORCE_ON_GCD[spellID] == true
+  local gcdFresh = self:GCDFresh()
+
+  -- A cast landing in the frame an effect ticked in, which did NOT start the
+  -- global cooldown, is one the game granted rather than one the player pressed
+  -- (Arms' Unhinged casting Mortal Strike during Bladestorm). Both halves are
+  -- needed: the server delivers a real press in the same frame as a tick often
+  -- enough that frame coincidence alone would eat abilities you did press.
+  if press and self.frameTickName and self.frameTickName ~= bname
+    and onGCD and not gcdFresh then
+    return
+  end
 
   for i = #self.casts, 1, -1 do
     local c = self.casts[i]
@@ -311,6 +340,7 @@ function Intake:Record(spellID, castGUID)
     t = now,
     frame = now,
     onGCD = onGCD,
+    gcdFresh = gcdFresh,
     ids = { [spellID] = true },
     pressed = press,
     lastPress = now,
@@ -361,6 +391,13 @@ local liveEnv = {
       return nil
     end
     return C_Spell.GetSpellDescription(spellID)
+  end,
+  -- Elapsed and duration of the global cooldown right now. duration 0 means the
+  -- GCD isn't running.
+  gcdState = function()
+    local gcd = C_Spell.GetSpellCooldown(61304)
+    if not gcd or not gcd.duration or gcd.duration == 0 then return 0, 0 end
+    return GetTime() - (gcd.startTime or 0), gcd.duration
   end,
   -- Records the raw event stream, before any rule has run, so a log can be
   -- replayed through the rules later (see replay.lua). Diagnostics only.

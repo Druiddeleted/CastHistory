@@ -18,6 +18,9 @@ local function makeEnv(clock)
   return {
     now = function() return clock.t end,
     hastedGCD = function() return clock.gcd end,
+    -- The recorded global cooldown, so "did this press start the GCD" replays
+    -- the same way it was seen live.
+    gcdState = function() return clock.gcdElapsed, clock.gcdDuration end,
     spellInfo = live.spellInfo,
     baseGCD = live.baseGCD,
     description = live.description,
@@ -33,7 +36,7 @@ function ns.Replay:Run(log)
     return nil, "debug log is empty -- run `/ch debug on`, play, then replay"
   end
 
-  local clock = { t = 0, gcd = 1.5 }
+  local clock = { t = 0, gcd = 1.5, gcdElapsed = 0, gcdDuration = 0 }
   local intake = ns.Intake.New(makeEnv(clock))
 
   local casts, events = {}, {}
@@ -42,6 +45,8 @@ function ns.Replay:Run(log)
     if e.t then
       clock.t = e.t
       if e.gcdDur and e.gcdDur > 0 then clock.gcd = e.gcdDur end
+      clock.gcdElapsed = e.gcdElapsed or 0
+      clock.gcdDuration = e.gcdDur or 0
       events[e.name or "?"] = (events[e.name or "?"] or 0) + 1
 
       intake:Observe(e.event, e.castGUID, e.spellID)
