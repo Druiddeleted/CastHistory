@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7-alpha3
+
+- Fix: abilities the game casts *for* you no longer appear as though you pressed them. The clearest case is Arms' Unhinged talent, which makes Bladestorm periodically cast Mortal Strike — those showed up as a row of Mortal Strike icons during a Bladestorm you couldn't have cast anything in. They report the same spell ID and the same "pressed" cast GUID as a real Mortal Strike, so nothing about the event itself distinguishes them; what gives them away is that each one arrives in the same frame as a Bladestorm tick. Across a 500-event log, all 48 granted strikes shared a frame with a tick and none of the 32 you actually pressed did.
+- A cast landing in the same frame as an ongoing effect's tick is now treated as granted rather than pressed. This is scoped to ticks — an event folding into a cast already on the timeline — so an ability with a paired secondary event (Execute) can't suppress a genuine off-GCD press that happens to land alongside it.
+
 ## 0.1.7-alpha2
 
 - Fix: the timeline filled with spells you never cast after logging in or changing zone — rep tabards ("Has Tabard", "Bilgewater Champion"), profession perks ("A Looker's Charm", "An Eye For Shine"), and the login effect itself. The client replays a cast event for every passive, tabard and profession bonus you have when you enter the world, and the existing filter only ignored the first 1.5 seconds of it. Measured against a real login, that batch arrived 3.9 seconds in — and after a loading screen it can be much later still.

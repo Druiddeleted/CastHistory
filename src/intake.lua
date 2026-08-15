@@ -90,7 +90,7 @@ function ns.Intake.New(env)
     replayUntil = 0,
     frameTime = nil,
     frameCount = 0,
-    frameFirstCast = 1,
+    frameTickName = nil,
   }, Intake)
 end
 
@@ -154,33 +154,65 @@ function Intake:Observe(event, castGUID, spellID)
   end
 end
 
+-- Per-frame bookkeeping. Events arriving in the same frame are one batch as far
+-- as the rules below are concerned.
+function Intake:BeginFrame(now)
+  if now == self.frameTime then return end
+  -- A finished batch means the replay has been and gone; stop watching, so
+  -- normal play is never subject to that rule.
+  if self.frameCount >= BURST_LIMIT then self.replayUntil = 0 end
+  self.frameTime = now
+  self.frameCount = 0
+  self.frameTickName = nil
+end
+
 -- True once this frame has produced so many events that it can only be the
 -- client replaying equipment and passives at us. Only consulted while the
 -- replay watch is armed (see BURST_LIMIT). The first events of a batch are
 -- recorded before the count gets there, so those are removed again when the
 -- threshold trips.
-function Intake:IsReplayBatch(now)
-  if now ~= self.frameTime then
-    -- A finished batch means the replay has been and gone; stop watching, so
-    -- normal play is never subject to this rule.
-    if self.frameCount >= BURST_LIMIT then self.replayUntil = 0 end
-    self.frameTime = now
-    self.frameCount = 0
-    self.frameFirstCast = #self.casts + 1
-  end
+function Intake:IsReplayBatch()
   self.frameCount = self.frameCount + 1
   if self.frameCount == BURST_LIMIT then
-    for i = #self.casts, self.frameFirstCast, -1 do
-      table.remove(self.casts, i)
-    end
+    self:DropFrame(nil)
   end
   return self.frameCount >= BURST_LIMIT
+end
+
+-- An effect that is mid-tick fires alongside casts the player never pressed.
+-- Arms' Unhinged talent is the clear case: every Mortal Strike it grants during
+-- Bladestorm arrives in the same frame as a Bladestorm tick, reporting the same
+-- spell ID and the same pressed-cast GUID as a real Mortal Strike, so nothing
+-- about the event itself gives it away. Across a 500-event log every one of the
+-- 47 granted strikes shared a frame with a tick and no genuine press ever did.
+--
+-- Scoped to ticks -- a triggered event folding into a cast already on the
+-- timeline -- rather than to triggered events generally. Execute's paired
+-- second event is also "triggered" but it *creates* its cast, so a real off-GCD
+-- press landing in that same frame is left alone.
+function Intake:NoteTick(bname)
+  self.frameTickName = bname
+  -- The granted cast can arrive before the tick that exposes it, so anything
+  -- else recorded this frame goes too.
+  self:DropFrame(bname)
+end
+
+-- Remove casts created in the current frame, except any named `keep`. Matched
+-- on the frame stamp rather than on a list index, because the max-icons trim
+-- removes from the front and shifts every index under us.
+function Intake:DropFrame(keep)
+  for i = #self.casts, 1, -1 do
+    local c = self.casts[i]
+    if c.frame ~= self.frameTime then break end
+    if c.baseName ~= keep then table.remove(self.casts, i) end
+  end
 end
 
 function Intake:Record(spellID, castGUID)
   local now = self.env.now()
   if now < self.suppressUntil then return end
-  if now < self.replayUntil and self:IsReplayBatch(now) then return end
+  self:BeginFrame(now)
+  if now < self.replayUntil and self:IsReplayBatch() then return end
   local info = self.env.spellInfo(spellID)
   if not info then return end
   -- Skip Blizzard's internal placeholder spells. "DNT" ("do not translate")
@@ -219,6 +251,7 @@ function Intake:Record(spellID, castGUID)
   -- train keeps sliding its own window forward without extending the window a
   -- genuine re-press is measured against.
   local press = isPress(castGUID)
+  if press and self.frameTickName and self.frameTickName ~= bname then return end
   -- An on-GCD spell can't be pressed again inside its own GCD, so a same-spellID
   -- repeat that fast is a tick, not a press. Off-GCD spells with charges can
   -- genuinely double-tap that fast, but only presses take the branch above.
@@ -262,6 +295,7 @@ function Intake:Record(spellID, castGUID)
           or (not c.ids[spellID] and age <= STRIKE_WINDOW) then
           c.ids[spellID] = true
           c.lastEffect = now
+          self:NoteTick(bname)
           return            -- periodic tick or extra strike of an existing press
         end
       end
@@ -275,6 +309,7 @@ function Intake:Record(spellID, castGUID)
     baseName = bname,
     icon = info.iconID,
     t = now,
+    frame = now,
     onGCD = onGCD,
     ids = { [spellID] = true },
     pressed = press,
