@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.7-alpha1
+
+- Collapse periodic abilities to a single icon per press. Bladestorm ticks around ten times over its duration and every tick reports the same spell ID, so one press was drawing ten icons in a row. Ticks now fold into the cast you actually pressed, as do paired secondary events like Execute's, while genuine re-presses still show separately.
+- Hide the internal system spells the game fires on you without you casting anything. Zone, quest and scenario machinery — "Disable ALL Mounts", "NoCho", "Med'jai's Protection", "[DNT] Player Inside WMO" and friends — was appearing on the timeline as casts you never made. Proc-granted abilities are unaffected: Rogue's Coup de Grace reports as an unknown spell but is still a real cast, so the filter keys on whether a spell has a tooltip rather than on whether you could cast it. Turn it off with "Hide internal/system spells you didn't cast" in `/ch config` or the Edit Mode dialog if you'd rather see everything — note that tooltip-less vehicle and scenario abilities are hidden too.
+- Config panel: the GCD marker checkboxes now take effect immediately instead of waiting for another setting to change. Settings are also declared in one place internally, so the Edit Mode dialog and the config panel can no longer drift apart.
+- New `/ch replay`: re-runs the recorded debug log through the cast-collapse rules and reports how many icons each spell produces. This is the regression check for the rules above — a change that quietly swallows real casts shows up as a spell whose count dropped.
+- New `/ch probe`: records what the game's API knows about every spell seen in the debug log, so filters can be built from observed data instead of guesses.
+- Restructured internally: all the rules deciding "which events are one cast" now live in a single module, the GCD/haste handling moved out of the cast timeline, and event registration no longer carries any logic of its own.
+
 ## 0.1.6
 
 - Collapse multi-strike abilities to a single icon per button press. Melee abilities that hit with both weapons or strike several times — Fury warrior's Rampage, Odyn's Fury, Whirlwind, Raging Blow, and Execute, plus off-GCD ones like Charge and Heroic Leap — each fire several `UNIT_SPELLCAST_SUCCEEDED` events, so one press was showing up as several icons. CastHistory now folds the extra strikes into the cast you actually pressed, while still showing genuine re-presses separately.

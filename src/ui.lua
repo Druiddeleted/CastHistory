@@ -109,87 +109,26 @@ function ns.UI:Build()
       ns.DB:DeleteLayout(name)
     end)
 
-    local function getter(key) return function() return ns.DB.profile[key] end end
-    local function setter(key, after)
-      return function(_, value)
-        ns.DB.profile[key] = value
-        ns.UI:ApplyLayout()
-        if after then after() end
-      end
+    -- Mapped straight off the settings schema, so a setting added there shows
+    -- up here without touching this file.
+    local KINDS = {
+      slider = lib.SettingType.Slider,
+      toggle = lib.SettingType.Checkbox,
+      choice = lib.SettingType.Dropdown,
+    }
+    local editModeSettings = {}
+    for entry in ns.Settings:Each("editMode") do
+      editModeSettings[#editModeSettings + 1] = {
+        kind = KINDS[entry.kind],
+        name = entry.label,
+        default = entry.default,
+        minValue = entry.min, maxValue = entry.max, valueStep = entry.step,
+        values = entry.values,
+        get = function() return ns.Settings:Get(entry) end,
+        set = function(_, value) ns.Settings:Set(entry, value) end,
+      }
     end
-
-    lib:AddFrameSettings(f, {
-      {
-        kind = lib.SettingType.Slider, name = "Time window (s)",
-        default = ns.DB.defaults.windowSeconds,
-        minValue = 3, maxValue = 30, valueStep = 1,
-        get = getter("windowSeconds"), set = setter("windowSeconds"),
-      },
-      {
-        kind = lib.SettingType.Slider, name = "Icon size",
-        default = ns.DB.defaults.iconSize,
-        minValue = 16, maxValue = 64, valueStep = 1,
-        get = getter("iconSize"), set = setter("iconSize"),
-      },
-      {
-        kind = lib.SettingType.Slider, name = "Max icons",
-        default = ns.DB.defaults.maxIcons,
-        minValue = 5, maxValue = 60, valueStep = 1,
-        get = getter("maxIcons"), set = setter("maxIcons"),
-      },
-      {
-        kind = lib.SettingType.Slider, name = "Alpha",
-        default = ns.DB.defaults.alpha,
-        minValue = 0.1, maxValue = 1.0, valueStep = 0.05,
-        get = getter("alpha"), set = setter("alpha"),
-      },
-      {
-        kind = lib.SettingType.Dropdown, name = "Growth direction",
-        default = ns.DB.defaults.growth,
-        values = {
-          { text = "Right", value = "RIGHT" },
-          { text = "Left",  value = "LEFT" },
-          { text = "Up",    value = "UP" },
-          { text = "Down",  value = "DOWN" },
-        },
-        get = getter("growth"), set = setter("growth"),
-      },
-      {
-        kind = lib.SettingType.Dropdown, name = "Frame strata",
-        default = ns.DB.defaults.strata,
-        values = {
-          { text = "Background",       value = "BACKGROUND" },
-          { text = "Low",              value = "LOW" },
-          { text = "Medium",           value = "MEDIUM" },
-          { text = "High",             value = "HIGH" },
-          { text = "Dialog",           value = "DIALOG" },
-          { text = "Fullscreen",       value = "FULLSCREEN" },
-          { text = "Fullscreen Dialog", value = "FULLSCREEN_DIALOG" },
-          { text = "Tooltip",          value = "TOOLTIP" },
-        },
-        get = getter("strata"), set = setter("strata"),
-      },
-      {
-        kind = lib.SettingType.Checkbox, name = "Show background",
-        default = ns.DB.defaults.background,
-        get = getter("background"), set = setter("background"),
-      },
-      {
-        kind = lib.SettingType.Checkbox, name = "Show base 1.5s GCD markers",
-        default = ns.DB.defaults.showBaseGCD,
-        get = getter("showBaseGCD"), set = setter("showBaseGCD"),
-      },
-      {
-        kind = lib.SettingType.Checkbox, name = "Show haste-adjusted GCD",
-        default = ns.DB.defaults.showHastedGCD,
-        get = getter("showHastedGCD"), set = setter("showHastedGCD"),
-      },
-      {
-        kind = lib.SettingType.Checkbox, name = "Show spell names",
-        default = ns.DB.defaults.showSpellNames,
-        get = getter("showSpellNames"), set = setter("showSpellNames"),
-      },
-    })
+    lib:AddFrameSettings(f, editModeSettings)
 
     lib:AddFrameSettingsButtons(f, {
       {
@@ -217,6 +156,10 @@ function ns.UI:Build()
   self.shownIcons = 0
 
   f:SetScript("OnUpdate", function() ns.UI:Refresh() end)
+
+  -- Marker spacing depends on the haste-adjusted GCD, so re-place the markers
+  -- when it changes rather than recomputing them every frame in Refresh.
+  ns.GCD:OnChange(function() ns.UI:LayoutGCDMarkers() end)
 
   self.frame = f
   self:ApplyLayout()
@@ -279,8 +222,8 @@ end
 -- Lay out the GCD reference markers. These sit at fixed offsets from the
 -- "now" anchor (secs * pixels-per-second) and so DON'T move as time passes --
 -- the only thing that changes their spacing is the haste-adjusted GCD or a
--- layout setting. So this runs from ApplyLayout (settings change) and from
--- Tracker:RefreshHastedGCD (haste change), NOT from the per-frame Refresh.
+-- layout setting. So this runs from ApplyLayout (settings change) and from the
+-- GCD change callback registered in Build, NOT from the per-frame Refresh.
 function ns.UI:LayoutGCDMarkers()
   local f = self.frame
   if not f then return end
@@ -300,7 +243,7 @@ function ns.UI:LayoutGCDMarkers()
     end
   end
   if p.showHastedGCD then
-    local step = ns.Tracker:GetHastedGCD()
+    local step = ns.GCD:Get()
     local secs = step
     while secs <= p.windowSeconds do
       local tex = self:GetGCDTex(gcdIdx)
@@ -321,12 +264,12 @@ function ns.UI:Refresh()
   local now = GetTime()
   local pps = pxPerSec()
 
-  ns.Tracker:Prune(p.windowSeconds)
+  -- Pruning happens inside Window; the timeline just asks for what's visible.
+  local casts = ns.Casts:Window(p.windowSeconds)
 
   -- Idle fast-path: with nothing in the window there are no icons to animate,
   -- so skip all per-frame work. GCD markers are laid out elsewhere (see
   -- LayoutGCDMarkers) and stay put, so we only clear icons shown last frame.
-  local casts = ns.Tracker.casts
   if #casts == 0 then
     for i = 1, self.shownIcons do f.icons[i]:Hide() end
     self.shownIcons = 0

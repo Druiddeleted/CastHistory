@@ -1,27 +1,25 @@
 local _, ns = ...
 
+-- Internal state that isn't a user-facing setting, so it has no schema entry.
 local defaults = {
-  shown = true,
   locked = false,
   point = "CENTER",
   relPoint = "CENTER",
   x = 0,
   y = -200,
-  windowSeconds = 8,
-  growth = "RIGHT", -- LEFT, RIGHT, UP, DOWN
-  iconSize = 32,
-  maxIcons = 30,
-  alpha = 1.0,
-  showBaseGCD = true,
-  showHastedGCD = true,
-  showSpellNames = false,
-  background = true,
-  strata = "HIGH",
   -- Per Edit Mode layout position overrides, keyed by layout name. The
   -- top-level point/relPoint/x/y above stay as the baseline fallback for any
   -- layout not present here (see DB:GetPosition).
   layouts = {},
 }
+
+-- Every user-facing setting's default comes from the schema, so the value, its
+-- label and its controls are declared in exactly one place. Merged in rather
+-- than referenced so ns.DB.defaults stays a single flat table -- callers read
+-- ns.DB.defaults.iconSize and ns.DB.defaults.point alike.
+for key, value in pairs(ns.Settings:Defaults()) do
+  defaults[key] = value
+end
 
 ns.DB = {}
 

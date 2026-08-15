@@ -2,34 +2,68 @@ local _, ns = ...
 
 ns.Options = {}
 
-local function makeCheck(parent, label, key, onChange)
-  local cb = CreateFrame("CheckButton", nil, parent, "InterfaceOptionsCheckButtonTemplate")
-  cb.Text:SetText(label)
-  cb:SetChecked(ns.DB.profile[key])
+-- Panel controls are built from the settings schema, so this file knows how to
+-- draw a slider/toggle/choice but nothing about which settings exist.
+
+local function makeToggle(panel, entry)
+  local cb = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+  cb.Text:SetText(entry.label)
+  cb:SetChecked(ns.Settings:Get(entry))
   cb:SetScript("OnClick", function(self)
-    ns.DB.profile[key] = self:GetChecked() and true or false
-    if onChange then onChange() end
+    ns.Settings:Set(entry, self:GetChecked() and true or false)
   end)
   return cb
 end
 
-local function makeSlider(parent, label, key, minV, maxV, step, onChange)
-  local s = CreateFrame("Slider", nil, parent, "OptionsSliderTemplate")
+local function makeSlider(panel, entry)
+  local s = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
+  local step = entry.step or 1
+  local function text(v)
+    return entry.label .. ": " .. (step >= 1 and v or string.format("%.2f", v))
+  end
   s:SetWidth(220)
-  s:SetMinMaxValues(minV, maxV)
+  s:SetMinMaxValues(entry.min, entry.max)
   s:SetValueStep(step)
   s:SetObeyStepOnDrag(true)
-  s:SetValue(ns.DB.profile[key])
-  s.Low:SetText(tostring(minV))
-  s.High:SetText(tostring(maxV))
-  s.Text:SetText(label .. ": " .. ns.DB.profile[key])
+  s:SetValue(ns.Settings:Get(entry))
+  s.Low:SetText(tostring(entry.min))
+  s.High:SetText(tostring(entry.max))
+  s.Text:SetText(text(ns.Settings:Get(entry)))
   s:SetScript("OnValueChanged", function(self, v)
     if step >= 1 then v = math.floor(v + 0.5) end
-    ns.DB.profile[key] = v
-    self.Text:SetText(label .. ": " .. (step >= 1 and v or string.format("%.2f", v)))
-    if onChange then onChange() end
+    ns.Settings:Set(entry, v)
+    self.Text:SetText(text(v))
   end)
   return s
+end
+
+local function makeChoice(panel, entry, index)
+  local label = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+  label:SetText(entry.label .. ":")
+
+  local dd = CreateFrame("Frame", "CastHistory" .. entry.key .. "Dropdown", panel, "UIDropDownMenuTemplate")
+  local function current()
+    local value = ns.Settings:Get(entry)
+    for _, v in ipairs(entry.values) do
+      if v.value == value then return v.text end
+    end
+    return tostring(value)
+  end
+  UIDropDownMenu_Initialize(dd, function(_, level)
+    for _, v in ipairs(entry.values) do
+      local info = UIDropDownMenu_CreateInfo()
+      info.text = v.text
+      info.func = function()
+        ns.Settings:Set(entry, v.value)
+        UIDropDownMenu_SetText(dd, v.text)
+      end
+      info.checked = (ns.Settings:Get(entry) == v.value)
+      UIDropDownMenu_AddButton(info, level)
+    end
+  end)
+  UIDropDownMenu_SetWidth(dd, entry.width or 120)
+  UIDropDownMenu_SetText(dd, current())
+  return dd, label
 end
 
 function ns.Options:Register()
@@ -44,95 +78,41 @@ function ns.Options:Register()
   desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
   desc:SetText("Horizontal timeline of your recent casts with GCD reference markers.")
 
-  local apply = function() ns.UI:ApplyLayout() end
-
-  local cbShown = makeCheck(panel, "Show frame", "shown", function()
-    if ns.DB.profile.shown then ns.UI.frame:Show() else ns.UI.frame:Hide() end
-  end)
-  cbShown:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -16)
-
-  local cbBg = makeCheck(panel, "Show background", "background", apply)
-  cbBg:SetPoint("TOPLEFT", cbShown, "BOTTOMLEFT", 0, -4)
-
-  local cbBase = makeCheck(panel, "Show base 1.5s GCD markers", "showBaseGCD")
-  cbBase:SetPoint("TOPLEFT", cbBg, "BOTTOMLEFT", 0, -4)
-
-  local cbHasted = makeCheck(panel, "Show haste-adjusted GCD markers", "showHastedGCD")
-  cbHasted:SetPoint("TOPLEFT", cbBase, "BOTTOMLEFT", 0, -4)
-
-  local cbNames = makeCheck(panel, "Show spell names under icons", "showSpellNames", apply)
-  cbNames:SetPoint("TOPLEFT", cbHasted, "BOTTOMLEFT", 0, -4)
-
-  local growthLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-  growthLabel:SetPoint("TOPLEFT", cbNames, "BOTTOMLEFT", 0, -16)
-  growthLabel:SetText("Growth direction:")
-  local growthDD = CreateFrame("Frame", "CastHistoryGrowthDropdown", panel, "UIDropDownMenuTemplate")
-  growthDD:SetPoint("TOPLEFT", growthLabel, "BOTTOMLEFT", -16, -4)
-  local growths = { "RIGHT", "LEFT", "UP", "DOWN" }
-  local function setGrowth(value)
-    ns.DB.profile.growth = value
-    UIDropDownMenu_SetText(growthDD, value)
-    ns.UI:ApplyLayout()
-  end
-  UIDropDownMenu_Initialize(growthDD, function(self, level)
-    for _, v in ipairs(growths) do
-      local info = UIDropDownMenu_CreateInfo()
-      info.text = v
-      info.func = function() setGrowth(v) end
-      info.checked = (ns.DB.profile.growth == v)
-      UIDropDownMenu_AddButton(info, level)
+  -- Absolute vertical cursor rather than a chain of relative anchors: the
+  -- schema decides what's drawn and in what order, so the control above any
+  -- given one isn't known here.
+  local y = -80
+  for entry in ns.Settings:Each("panel") do
+    if entry.kind == "toggle" then
+      local cb = makeToggle(panel, entry)
+      cb:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, y)
+      y = y - 28
+    elseif entry.kind == "slider" then
+      local s = makeSlider(panel, entry)
+      s:SetPoint("TOPLEFT", panel, "TOPLEFT", 24, y - 14)
+      y = y - 56
+    elseif entry.kind == "choice" then
+      local dd, label = makeChoice(panel, entry)
+      label:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, y)
+      dd:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, y - 18)
+      y = y - 56
     end
-  end)
-  UIDropDownMenu_SetWidth(growthDD, 120)
-  UIDropDownMenu_SetText(growthDD, ns.DB.profile.growth)
-
-  local strataLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-  strataLabel:SetPoint("TOPLEFT", growthDD, "BOTTOMLEFT", 16, -12)
-  strataLabel:SetText("Frame strata:")
-  local strataDD = CreateFrame("Frame", "CastHistoryStrataDropdown", panel, "UIDropDownMenuTemplate")
-  strataDD:SetPoint("TOPLEFT", strataLabel, "BOTTOMLEFT", -16, -4)
-  local stratas = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
-  local function setStrata(value)
-    ns.DB.profile.strata = value
-    UIDropDownMenu_SetText(strataDD, value)
-    ns.UI:ApplyLayout()
   end
-  UIDropDownMenu_Initialize(strataDD, function(self, level)
-    for _, v in ipairs(stratas) do
-      local info = UIDropDownMenu_CreateInfo()
-      info.text = v
-      info.func = function() setStrata(v) end
-      info.checked = (ns.DB.profile.strata == v)
-      UIDropDownMenu_AddButton(info, level)
-    end
-  end)
-  UIDropDownMenu_SetWidth(strataDD, 160)
-  UIDropDownMenu_SetText(strataDD, ns.DB.profile.strata)
 
-  local sWindow = makeSlider(panel, "Time window (seconds)", "windowSeconds", 3, 30, 1, apply)
-  sWindow:SetPoint("TOPLEFT", strataDD, "BOTTOMLEFT", 16, -20)
-
-  local sSize = makeSlider(panel, "Icon size", "iconSize", 16, 64, 1, apply)
-  sSize:SetPoint("TOPLEFT", sWindow, "BOTTOMLEFT", 0, -32)
-
-  local sMax = makeSlider(panel, "Max icons", "maxIcons", 5, 60, 1, apply)
-  sMax:SetPoint("TOPLEFT", sSize, "BOTTOMLEFT", 0, -32)
-
-  local sAlpha = makeSlider(panel, "Alpha", "alpha", 0.1, 1.0, 0.05, apply)
-  sAlpha:SetPoint("TOPLEFT", sMax, "BOTTOMLEFT", 0, -32)
-
+  -- Not a profile setting: debug logging is account-wide diagnostic state.
   local cbDebug = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
   cbDebug.Text:SetText("Debug logging (writes events to SavedVariables)")
   cbDebug:SetChecked(CastHistoryDB.debug)
   cbDebug:SetScript("OnClick", function(self)
     CastHistoryDB.debug = self:GetChecked() and true or false
   end)
-  cbDebug:SetPoint("TOPLEFT", sAlpha, "BOTTOMLEFT", -16, -24)
+  cbDebug:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, y - 12)
+  y = y - 48
 
   local reset = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
   reset:SetSize(140, 22)
   reset:SetText("Reset position")
-  reset:SetPoint("TOPLEFT", cbDebug, "BOTTOMLEFT", 16, -16)
+  reset:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, y)
   reset:SetScript("OnClick", function()
     -- Reset the active Edit Mode layout's position to default; other HUD
     -- profiles keep their own saved positions.
