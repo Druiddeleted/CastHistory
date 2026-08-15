@@ -23,6 +23,24 @@ local MERGE_SCAN = 10
 -- passive/equipment/tabard spell on the player. Drop that flood.
 local LOGIN_SUPPRESS = 1.5
 
+-- The replay doesn't always arrive inside that window -- measured 3.9s after
+-- one PLAYER_ENTERING_WORLD and ~56s after another, because a loading screen
+-- fires the event again -- so timing alone can't catch it. Widening the window
+-- isn't the answer either: it would blind the timeline for seconds after every
+-- zone change.
+--
+-- What separates the replay is volume: it arrives as one batch in a single
+-- frame (241 events in a measured login, all sharing a timestamp).
+--
+-- Volume alone is NOT safe to filter on in general, though. A burst macro can
+-- legitimately fire several abilities in one frame, and abilities that emit a
+-- paired event (Execute sends two) multiply that. So the batch rule is armed
+-- only while we're expecting the replay -- from PLAYER_ENTERING_WORLD until the
+-- replay shows up or the watch expires. Outside that window no amount of casts
+-- in one frame is ever discarded, so nothing a player can press is at risk.
+local BURST_LIMIT = 12
+local REPLAY_WATCH = 60
+
 -- Spells the DBC flags as off-GCD but that visually belong on the main row.
 -- Skyriding skills don't share the player GCD but they're the player's
 -- primary active inputs while mounted.
@@ -69,6 +87,10 @@ function ns.Intake.New(env)
     suppressUntil = 0,
     channelName = nil,
     channelValidUntil = 0,
+    replayUntil = 0,
+    frameTime = nil,
+    frameCount = 0,
+    frameFirstCast = 1,
   }, Intake)
 end
 
@@ -112,7 +134,11 @@ function Intake:Observe(event, castGUID, spellID)
   if self.env.log then self.env.log(self, event, castGUID, spellID) end
 
   if event == "PLAYER_ENTERING_WORLD" then
-    self.suppressUntil = self.env.now() + LOGIN_SUPPRESS
+    local now = self.env.now()
+    self.suppressUntil = now + LOGIN_SUPPRESS
+    -- Arm the replay watch: the batch usually lands a few seconds later, but a
+    -- loading screen can delay it much further.
+    self.replayUntil = now + REPLAY_WATCH
   elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
     local info = self.env.spellInfo(spellID)
     self.channelName = info and info.name
@@ -128,9 +154,33 @@ function Intake:Observe(event, castGUID, spellID)
   end
 end
 
+-- True once this frame has produced so many events that it can only be the
+-- client replaying equipment and passives at us. Only consulted while the
+-- replay watch is armed (see BURST_LIMIT). The first events of a batch are
+-- recorded before the count gets there, so those are removed again when the
+-- threshold trips.
+function Intake:IsReplayBatch(now)
+  if now ~= self.frameTime then
+    -- A finished batch means the replay has been and gone; stop watching, so
+    -- normal play is never subject to this rule.
+    if self.frameCount >= BURST_LIMIT then self.replayUntil = 0 end
+    self.frameTime = now
+    self.frameCount = 0
+    self.frameFirstCast = #self.casts + 1
+  end
+  self.frameCount = self.frameCount + 1
+  if self.frameCount == BURST_LIMIT then
+    for i = #self.casts, self.frameFirstCast, -1 do
+      table.remove(self.casts, i)
+    end
+  end
+  return self.frameCount >= BURST_LIMIT
+end
+
 function Intake:Record(spellID, castGUID)
   local now = self.env.now()
   if now < self.suppressUntil then return end
+  if now < self.replayUntil and self:IsReplayBatch(now) then return end
   local info = self.env.spellInfo(spellID)
   if not info then return end
   -- Skip Blizzard's internal placeholder spells. "DNT" ("do not translate")

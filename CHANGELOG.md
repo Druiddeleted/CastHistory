@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7-alpha2
+
+- Fix: the timeline filled with spells you never cast after logging in or changing zone — rep tabards ("Has Tabard", "Bilgewater Champion"), profession perks ("A Looker's Charm", "An Eye For Shine"), and the login effect itself. The client replays a cast event for every passive, tabard and profession bonus you have when you enter the world, and the existing filter only ignored the first 1.5 seconds of it. Measured against a real login, that batch arrived 3.9 seconds in — and after a loading screen it can be much later still.
+- Rather than widening that window (which would blind the timeline for seconds after every zone change), the replay is now recognised by its shape: it arrives as one huge batch in a single frame — 241 events at once in the login that was measured. That rule is only active while the client is expected to be replaying, so a burst macro firing several abilities in one frame during normal play is never affected, no matter how many casts it produces.
+
 ## 0.1.7-alpha1
 
 - Collapse periodic abilities to a single icon per press. Bladestorm ticks around ten times over its duration and every tick reports the same spell ID, so one press was drawing ten icons in a row. Ticks now fold into the cast you actually pressed, as do paired secondary events like Execute's, while genuine re-presses still show separately.
