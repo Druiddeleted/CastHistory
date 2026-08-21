@@ -1,32 +1,15 @@
 # Changelog
 
-## 0.1.7-alpha5
+## 0.1.7
 
-- Now targets the current client. The `## Interface` number still said 12.0.5, two patches behind 12.1.0, so the addon showed as out of date in the in-game list and was published against the wrong game version on CurseForge. No functional change.
-
-## 0.1.7-alpha4
-
-- Fix: abilities you pressed during Bladestorm (Storm Bolt, and anything else) were being hidden. alpha3 treated any cast arriving in the same frame as an effect's tick as game-granted, but the server frequently delivers a genuine press in the same frame as a tick, so real abilities disappeared.
-- A cast is now only treated as granted when it lands in a tick's frame **and** it's an on-GCD ability that didn't start the global cooldown. Pressing an on-GCD ability always starts the GCD; a cast the game grants you doesn't. Against a log of real play this drops all 45 Unhinged-granted Mortal Strikes while keeping every one of the 33 you pressed — including the Mortal Strike and the Storm Bolt that happened to land in the same frame as a tick.
-
-## 0.1.7-alpha3
-
-- Fix: abilities the game casts *for* you no longer appear as though you pressed them. The clearest case is Arms' Unhinged talent, which makes Bladestorm periodically cast Mortal Strike — those showed up as a row of Mortal Strike icons during a Bladestorm you couldn't have cast anything in. They report the same spell ID and the same "pressed" cast GUID as a real Mortal Strike, so nothing about the event itself distinguishes them; what gives them away is that each one arrives in the same frame as a Bladestorm tick. Across a 500-event log, all 48 granted strikes shared a frame with a tick and none of the 32 you actually pressed did.
-- A cast landing in the same frame as an ongoing effect's tick is now treated as granted rather than pressed. This is scoped to ticks — an event folding into a cast already on the timeline — so an ability with a paired secondary event (Execute) can't suppress a genuine off-GCD press that happens to land alongside it.
-
-## 0.1.7-alpha2
-
-- Fix: the timeline filled with spells you never cast after logging in or changing zone — rep tabards ("Has Tabard", "Bilgewater Champion"), profession perks ("A Looker's Charm", "An Eye For Shine"), and the login effect itself. The client replays a cast event for every passive, tabard and profession bonus you have when you enter the world, and the existing filter only ignored the first 1.5 seconds of it. Measured against a real login, that batch arrived 3.9 seconds in — and after a loading screen it can be much later still.
-- Rather than widening that window (which would blind the timeline for seconds after every zone change), the replay is now recognised by its shape: it arrives as one huge batch in a single frame — 241 events at once in the login that was measured. That rule is only active while the client is expected to be replaying, so a burst macro firing several abilities in one frame during normal play is never affected, no matter how many casts it produces.
-
-## 0.1.7-alpha1
-
-- Collapse periodic abilities to a single icon per press. Bladestorm ticks around ten times over its duration and every tick reports the same spell ID, so one press was drawing ten icons in a row. Ticks now fold into the cast you actually pressed, as do paired secondary events like Execute's, while genuine re-presses still show separately.
-- Hide the internal system spells the game fires on you without you casting anything. Zone, quest and scenario machinery — "Disable ALL Mounts", "NoCho", "Med'jai's Protection", "[DNT] Player Inside WMO" and friends — was appearing on the timeline as casts you never made. Proc-granted abilities are unaffected: Rogue's Coup de Grace reports as an unknown spell but is still a real cast, so the filter keys on whether a spell has a tooltip rather than on whether you could cast it. Turn it off with "Hide internal/system spells you didn't cast" in `/ch config` or the Edit Mode dialog if you'd rather see everything — note that tooltip-less vehicle and scenario abilities are hidden too.
-- Config panel: the GCD marker checkboxes now take effect immediately instead of waiting for another setting to change. Settings are also declared in one place internally, so the Edit Mode dialog and the config panel can no longer drift apart.
-- New `/ch replay`: re-runs the recorded debug log through the cast-collapse rules and reports how many icons each spell produces. This is the regression check for the rules above — a change that quietly swallows real casts shows up as a spell whose count dropped.
-- New `/ch probe`: records what the game's API knows about every spell seen in the debug log, so filters can be built from observed data instead of guesses.
-- Restructured internally: all the rules deciding "which events are one cast" now live in a single module, the GCD/haste handling moved out of the cast timeline, and event registration no longer carries any logic of its own.
+- **Bladestorm (and other periodic abilities) now draw one icon per press.** A channelled or periodic ability fires a cast event on every tick, each reporting the same spell ID, so a single Bladestorm was drawing ten icons in a row. Ticks now fold into the cast you actually pressed, as do the paired secondary events some abilities send (Execute), while genuine re-presses still show separately.
+- **Abilities the game casts for you are no longer shown as yours.** Arms' Unhinged talent makes Bladestorm periodically cast Mortal Strike; those filled the timeline with Mortal Strikes during a Bladestorm. They report the same spell ID and the same "pressed" cast GUID as a real Mortal Strike, so they're identified by landing in the same frame as a tick without starting the global cooldown — which a real press always does. Anything you actually press mid-Bladestorm, on or off the GCD, still shows.
+- **Logging in or changing zone no longer floods the timeline.** The client replays a cast event for every passive, tabard and profession bonus you have when you enter the world — rep tabards, profession perks, the login effect itself. Previously only the first 1.5 seconds of that was ignored, and the batch usually arrives later than that. It's now recognised by its shape (one large batch in a single frame) rather than by timing, and only while the client is expected to be replaying, so a burst macro during normal play is never affected.
+- **Internal system spells are hidden.** Zone, quest and scenario machinery fires casts on you constantly — "Disable ALL Mounts", "NoCho", "[DNT] Player Inside WMO" and friends — which appeared as casts you never made. Proc-granted abilities are unaffected: Rogue's Coup de Grace reports as an unknown spell but is a real cast, so the filter keys on whether a spell has a tooltip rather than on whether you could cast it. Turn it off with "Hide internal/system spells you didn't cast" if you'd rather see everything; note that tooltip-less vehicle and scenario abilities are hidden too.
+- Config panel: the GCD marker checkboxes now take effect immediately instead of waiting for another setting to change. Settings are declared in one place internally, so the Edit Mode dialog and the config panel can no longer drift apart.
+- New `/ch replay`: re-runs the recorded debug log through the cast rules and reports how many icons each spell produces. New `/ch probe`: records what the game's API knows about every spell seen in the log. Both are diagnostics for working out why a spell does or doesn't appear.
+- Now targets the 12.1.0 client. The interface number had been left at 12.0.5, so the addon showed as out of date in the in-game list.
+- Restructured internally: every rule deciding "which events are one cast" now lives in a single module, GCD/haste handling moved out of the cast timeline, and event registration carries no logic of its own.
 
 ## 0.1.6
 
