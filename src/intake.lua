@@ -395,9 +395,20 @@ local liveEnv = {
   -- Elapsed and duration of the global cooldown right now. duration 0 means the
   -- GCD isn't running.
   gcdState = function()
-    local gcd = C_Spell.GetSpellCooldown(61304)
-    if not gcd or not gcd.duration or gcd.duration == 0 then return 0, 0 end
-    return GetTime() - (gcd.startTime or 0), gcd.duration
+    -- C_Spell.GetSpellCooldown can hand back a Secret Value once we're tainted
+    -- in combat (Patch 12.0+, and Secret Values are enforced on Forever too),
+    -- and comparing or doing arithmetic on a Secret throws. This runs on every
+    -- recorded cast, so an unguarded throw would break cast recording in combat
+    -- -- exactly where it matters. pcall it and fall back to "GCD unknown"
+    -- (0, 0), which makes GCDFresh report not-fresh rather than erroring. Same
+    -- guard gcd.lua already uses for UnitSpellHaste.
+    local ok, elapsed, duration = pcall(function()
+      local gcd = C_Spell.GetSpellCooldown(61304)
+      if not gcd or not gcd.duration or gcd.duration == 0 then return 0, 0 end
+      return GetTime() - (gcd.startTime or 0), gcd.duration
+    end)
+    if not ok then return 0, 0 end
+    return elapsed, duration
   end,
   -- Records the raw event stream, before any rule has run, so a log can be
   -- replayed through the rules later (see replay.lua). Diagnostics only.
@@ -405,13 +416,23 @@ local liveEnv = {
     if not CastHistoryDB.debug then return end
     -- PLAYER_ENTERING_WORLD carries no spell.
     local info = spellID and C_Spell.GetSpellInfo(spellID)
-    local gcd = C_Spell.GetSpellCooldown(61304)
+    -- Same Secret Values risk as gcdState above: the GCD cooldown's fields can
+    -- be Secret in combat, and the elapsed arithmetic would throw. Guard it so
+    -- debug logging -- the tool we reach for mid-combat -- never errors.
+    local gcdElapsed, gcdDur
+    pcall(function()
+      local gcd = C_Spell.GetSpellCooldown(61304)
+      if gcd then
+        gcdDur = gcd.duration
+        if gcd.startTime then gcdElapsed = GetTime() - gcd.startTime end
+      end
+    end)
     table.insert(CastHistoryDB.log, {
       t = GetTime(), event = event, spellID = spellID,
       name = info and info.name or "?", castGUID = castGUID,
       icon = info and info.iconID,
-      gcdElapsed = gcd and gcd.startTime and (GetTime() - gcd.startTime) or nil,
-      gcdDur = gcd and gcd.duration or nil,
+      gcdElapsed = gcdElapsed,
+      gcdDur = gcdDur,
     })
     if #CastHistoryDB.log > 500 then table.remove(CastHistoryDB.log, 1) end
   end,

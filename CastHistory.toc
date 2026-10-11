@@ -1,8 +1,8 @@
-## Interface: 120100
+## Interface: 120100, 16001
 ## Title: CastHistory
 ## Notes: Horizontal timeline of your recent casts with GCD reference markers.
 ## Author: Druiddeleted
-## Version: 0.1.7
+## Version: 0.1.8
 ## SavedVariables: CastHistoryDB
 
 Libs\LibStub\LibStub.lua

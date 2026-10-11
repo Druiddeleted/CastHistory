@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.8
+
+- **Now runs on WoW: Forever (Classic+).** Forever is Classic content on the current client framework, so CastHistory works there with no feature loss — the timeline, GCD markers, Edit Mode positioning and the cast-collapse rules all behave as they do on retail. The interface version is declared for both clients, so one install covers both.
+- **No longer risks a combat error reading the global cooldown.** The GCD is read to tell a periodic tick apart from a genuine re-press; on Patch 12.0+ (and on Forever) that read can return a protected "Secret" value in combat, and touching one throws. It's now guarded the same way the haste read already is, falling back to treating the GCD as unknown rather than erroring.
+
 ## 0.1.7
 
 - **Bladestorm (and other periodic abilities) now draw one icon per press.** A channelled or periodic ability fires a cast event on every tick, each reporting the same spell ID, so a single Bladestorm was drawing ten icons in a row. Ticks now fold into the cast you actually pressed, as do the paired secondary events some abilities send (Execute), while genuine re-presses still show separately.
