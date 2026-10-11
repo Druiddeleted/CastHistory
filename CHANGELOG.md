@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9
+
+- **The settings page no longer spills past the bottom of the Options window.** The last few settings were drawn below the panel, over the game world. The page is now built on the game's own settings layout, the same one Blizzard's pages use, so it scrolls and lines up with the rest of the Options window. Your settings also show up in the Options search box, and a Defaults button resets them.
+- **Shorter setting names, with the detail in hover tooltips.** Long names were cut off with "…". Four settings were renamed, in both the settings page and the Edit Mode dialog: "Base GCD markers", "Hasted GCD markers", "Spell names" and "Hide system spells". They work exactly as before, and your saved choices carry over.
+- Debug logging (`/ch debug on`) now records the full lifecycle of each cast (start, pushback, cancel and interrupt), as groundwork for showing hardcasts as bars on the timeline. This has no effect unless debug logging is on.
+
 ## 0.1.8
 
 - **Now runs on WoW: Forever (Classic+).** Forever is Classic content on the current client framework, so CastHistory works there with no feature loss — the timeline, GCD markers, Edit Mode positioning and the cast-collapse rules all behave as they do on retail. The interface version is declared for both clients, so one install covers both.

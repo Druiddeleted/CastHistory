@@ -2,143 +2,119 @@ local _, ns = ...
 
 ns.Options = {}
 
--- Panel controls are built from the settings schema, so this file knows how to
--- draw a slider/toggle/choice but nothing about which settings exist.
+-- The /ch config page, built on Blizzard's native vertical settings layout
+-- rather than controls hand-placed on a fixed canvas. Blizzard owns spacing and
+-- scrolling, so the page can't overflow as settings are added, and every
+-- setting is findable from the Options search box.
+--
+-- Controls are built from the settings schema through proxy settings: the
+-- native control reads and writes through ns.Settings, so a change made here
+-- runs the same side effects as one made in the Edit Mode dialog.
 
-local function makeToggle(panel, entry)
-  local cb = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
-  cb.Text:SetText(entry.label)
-  cb:SetChecked(ns.Settings:Get(entry))
-  cb:SetScript("OnClick", function(self)
-    ns.Settings:Set(entry, self:GetChecked() and true or false)
-  end)
-  return cb
+-- Settings.VarType names the storage type; it's the plain Lua type name on
+-- the clients we target, but resolve it through the table when it exists.
+local function varType(value)
+  local t = type(value)
+  local vt = Settings.VarType
+  if vt then
+    return ({ boolean = vt.Boolean, number = vt.Number, string = vt.String })[t] or t
+  end
+  return t
 end
 
-local function makeSlider(panel, entry)
-  local s = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
+-- Variable names are global across every addon's settings, so prefix them.
+local function proxy(category, key, label, default, get, set)
+  return Settings.RegisterProxySetting(category, "CastHistory_" .. key,
+    varType(default), label, default, get, set)
+end
+
+-- Blizzard renamed CheckBox/DropDown to Checkbox/Dropdown in 11.0. Resolved in
+-- Register rather than at file load, when Settings is guaranteed to exist.
+local createCheckbox, createDropdown
+
+local function addToggle(category, entry)
+  local setting = proxy(category, entry.key, entry.label, entry.default,
+    function() return ns.Settings:Get(entry) end,
+    function(value) ns.Settings:Set(entry, value) end)
+  createCheckbox(category, setting, entry.tooltip)
+end
+
+local function addSlider(category, entry)
   local step = entry.step or 1
-  local function text(v)
-    return entry.label .. ": " .. (step >= 1 and v or string.format("%.2f", v))
+  local setting = proxy(category, entry.key, entry.label, entry.default,
+    function() return ns.Settings:Get(entry) end,
+    function(value)
+      -- Integer settings stay integers even if the slider hands back drift.
+      if step >= 1 then value = math.floor(value + 0.5) end
+      ns.Settings:Set(entry, value)
+    end)
+  local options = Settings.CreateSliderOptions(entry.min, entry.max, step)
+  if MinimalSliderWithSteppersMixin then
+    options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, function(value)
+      return step >= 1 and tostring(math.floor(value + 0.5)) or string.format("%.2f", value)
+    end)
   end
-  s:SetWidth(220)
-  s:SetMinMaxValues(entry.min, entry.max)
-  s:SetValueStep(step)
-  s:SetObeyStepOnDrag(true)
-  s:SetValue(ns.Settings:Get(entry))
-  s.Low:SetText(tostring(entry.min))
-  s.High:SetText(tostring(entry.max))
-  s.Text:SetText(text(ns.Settings:Get(entry)))
-  s:SetScript("OnValueChanged", function(self, v)
-    if step >= 1 then v = math.floor(v + 0.5) end
-    ns.Settings:Set(entry, v)
-    self.Text:SetText(text(v))
-  end)
-  return s
+  Settings.CreateSlider(category, setting, options, entry.tooltip)
 end
 
-local function makeChoice(panel, entry, index)
-  local label = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-  label:SetText(entry.label .. ":")
-
-  local dd = CreateFrame("Frame", "CastHistory" .. entry.key .. "Dropdown", panel, "UIDropDownMenuTemplate")
-  local function current()
-    local value = ns.Settings:Get(entry)
+local function addChoice(category, entry)
+  local setting = proxy(category, entry.key, entry.label, entry.default,
+    function() return ns.Settings:Get(entry) end,
+    function(value) ns.Settings:Set(entry, value) end)
+  local function values()
+    local container = Settings.CreateControlTextContainer()
     for _, v in ipairs(entry.values) do
-      if v.value == value then return v.text end
+      container:Add(v.value, v.text)
     end
-    return tostring(value)
+    return container:GetData()
   end
-  UIDropDownMenu_Initialize(dd, function(_, level)
-    for _, v in ipairs(entry.values) do
-      local info = UIDropDownMenu_CreateInfo()
-      info.text = v.text
-      info.func = function()
-        ns.Settings:Set(entry, v.value)
-        UIDropDownMenu_SetText(dd, v.text)
-      end
-      info.checked = (ns.Settings:Get(entry) == v.value)
-      UIDropDownMenu_AddButton(info, level)
-    end
-  end)
-  UIDropDownMenu_SetWidth(dd, entry.width or 120)
-  UIDropDownMenu_SetText(dd, current())
-  return dd, label
+  createDropdown(category, setting, values, entry.tooltip)
+end
+
+local ADD = { toggle = addToggle, slider = addSlider, choice = addChoice }
+
+local function addHeader(layout, text)
+  if CreateSettingsListSectionHeaderInitializer then
+    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(text))
+  end
 end
 
 function ns.Options:Register()
-  local panel = CreateFrame("Frame")
-  panel.name = "CastHistory"
+  -- Both clients we ship to (retail and Forever) have the native settings UI;
+  -- without it /ch config simply has nothing to open.
+  if not (Settings and Settings.RegisterVerticalLayoutCategory) then return end
+  createCheckbox = Settings.CreateCheckbox or Settings.CreateCheckBox
+  createDropdown = Settings.CreateDropdown or Settings.CreateDropDown
 
-  local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-  title:SetPoint("TOPLEFT", 16, -16)
-  title:SetText("CastHistory")
+  local category, layout = Settings.RegisterVerticalLayoutCategory("CastHistory")
 
-  local desc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-  desc:SetText("Horizontal timeline of your recent casts with GCD reference markers.")
-
-  -- Absolute vertical cursor rather than a chain of relative anchors: the
-  -- schema decides what's drawn and in what order, so the control above any
-  -- given one isn't known here.
-  local y = -80
   for entry in ns.Settings:Each("panel") do
-    if entry.kind == "toggle" then
-      local cb = makeToggle(panel, entry)
-      cb:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, y)
-      y = y - 28
-    elseif entry.kind == "slider" then
-      local s = makeSlider(panel, entry)
-      s:SetPoint("TOPLEFT", panel, "TOPLEFT", 24, y - 14)
-      y = y - 56
-    elseif entry.kind == "choice" then
-      local dd, label = makeChoice(panel, entry)
-      label:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, y)
-      dd:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, y - 18)
-      y = y - 56
-    end
+    ADD[entry.kind](category, entry)
   end
 
+  addHeader(layout, "Position")
+  if CreateSettingsButtonInitializer then
+    layout:AddInitializer(CreateSettingsButtonInitializer(
+      "Frame position", "Reset",
+      function() ns.UI:ResetPosition() end,
+      "Move the timeline back to its default spot in the active Edit Mode layout. Other layouts keep their positions.",
+      true))
+  end
+
+  addHeader(layout, "Diagnostics")
   -- Not a profile setting: debug logging is account-wide diagnostic state.
-  local cbDebug = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
-  cbDebug.Text:SetText("Debug logging (writes events to SavedVariables)")
-  cbDebug:SetChecked(CastHistoryDB.debug)
-  cbDebug:SetScript("OnClick", function(self)
-    CastHistoryDB.debug = self:GetChecked() and true or false
-  end)
-  cbDebug:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, y - 12)
-  y = y - 48
+  local debug = proxy(category, "debug", "Debug logging", false,
+    function() return CastHistoryDB.debug == true end,
+    function(value) CastHistoryDB.debug = value and true or false end)
+  createCheckbox(category, debug,
+    "Record raw spell events to SavedVariables for /ch replay and /ch probe.")
 
-  local reset = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-  reset:SetSize(140, 22)
-  reset:SetText("Reset position")
-  reset:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, y)
-  reset:SetScript("OnClick", function()
-    -- Reset the active Edit Mode layout's position to default; other HUD
-    -- profiles keep their own saved positions.
-    local lib = LibStub and LibStub("LibEditMode", true)
-    local layoutName = lib and lib:GetActiveLayoutName()
-    local d = ns.DB.defaults
-    ns.DB:SetPosition(layoutName, d.point, d.relPoint, d.x, d.y)
-    ns.UI:ApplyPosition()
-  end)
-
-  if Settings and Settings.RegisterCanvasLayoutCategory then
-    local category = Settings.RegisterCanvasLayoutCategory(panel, "CastHistory")
-    Settings.RegisterAddOnCategory(category)
-    self.category = category
-  elseif InterfaceOptions_AddCategory then
-    InterfaceOptions_AddCategory(panel)
-  end
-
-  self.panel = panel
+  Settings.RegisterAddOnCategory(category)
+  self.category = category
 end
 
 function ns.Options:Open()
-  if Settings and self.category then
-    Settings.OpenToCategory(self.category.ID)
-  elseif InterfaceOptionsFrame_OpenToCategory then
-    InterfaceOptionsFrame_OpenToCategory(self.panel)
-    InterfaceOptionsFrame_OpenToCategory(self.panel)
+  if self.category then
+    Settings.OpenToCategory(self.category:GetID())
   end
 end

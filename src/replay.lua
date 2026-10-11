@@ -11,6 +11,20 @@ local _, ns = ...
 
 ns.Replay = {}
 
+-- Cast lifecycle events are logged for the cast-bar work but carry no collapse
+-- rules yet. Leave them out of the per-spell event tally so the report keeps
+-- measuring what it always has: events the rules turn into casts.
+local LIFECYCLE = {
+  UNIT_SPELLCAST_SENT = true,
+  UNIT_SPELLCAST_START = true,
+  UNIT_SPELLCAST_DELAYED = true,
+  UNIT_SPELLCAST_STOP = true,
+  UNIT_SPELLCAST_INTERRUPTED = true,
+  UNIT_SPELLCAST_FAILED = true,
+  UNIT_SPELLCAST_FAILED_QUIET = true,
+  UNIT_SPELLCAST_CHANNEL_UPDATE = true,
+}
+
 -- The replay adapter. Only time is faked; spell lookups stay live, because the
 -- spell database is static data that a recording has no reason to duplicate.
 local function makeEnv(clock)
@@ -47,7 +61,9 @@ function ns.Replay:Run(log)
       if e.gcdDur and e.gcdDur > 0 then clock.gcd = e.gcdDur end
       clock.gcdElapsed = e.gcdElapsed or 0
       clock.gcdDuration = e.gcdDur or 0
-      events[e.name or "?"] = (events[e.name or "?"] or 0) + 1
+      if not LIFECYCLE[e.event] then
+        events[e.name or "?"] = (events[e.name or "?"] or 0) + 1
+      end
 
       intake:Observe(e.event, e.castGUID, e.spellID)
 

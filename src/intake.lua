@@ -427,14 +427,32 @@ local liveEnv = {
         if gcd.startTime then gcdElapsed = GetTime() - gcd.startTime end
       end
     end)
-    table.insert(CastHistoryDB.log, {
+    local entry = {
       t = GetTime(), event = event, spellID = spellID,
       name = info and info.name or "?", castGUID = castGUID,
       icon = info and info.iconID,
       gcdElapsed = gcdElapsed,
       gcdDur = gcdDur,
-    })
-    if #CastHistoryDB.log > 500 then table.remove(CastHistoryDB.log, 1) end
+      combat = InCombatLockdown(),
+      -- Catalog cast time (ms), to compare against the real span below.
+      baseCastTime = info and info.castTime,
+    }
+    -- What the client says the current cast/channel spans (start/end in ms on
+    -- the GetTime clock). Stored raw, never compared: if either goes Secret in
+    -- combat, the SavedVariables file shows it rather than this throwing.
+    if spellID then
+      pcall(function()
+        local _, _, _, startMS, endMS = UnitCastingInfo("player")
+        entry.castStart, entry.castEnd = startMS, endMS
+      end)
+      pcall(function()
+        local _, _, _, startMS, endMS = UnitChannelInfo("player")
+        entry.chanStart, entry.chanEnd = startMS, endMS
+      end)
+    end
+    table.insert(CastHistoryDB.log, entry)
+    -- Lifecycle events roughly triple the volume per cast, so keep more of it.
+    if #CastHistoryDB.log > 2000 then table.remove(CastHistoryDB.log, 1) end
   end,
 }
 

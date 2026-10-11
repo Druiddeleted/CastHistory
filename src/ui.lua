@@ -133,14 +133,7 @@ function ns.UI:Build()
     lib:AddFrameSettingsButtons(f, {
       {
         text = "Reset position",
-        click = function()
-          -- Reset only the active layout's position so other HUD profiles keep
-          -- theirs.
-          local layoutName = lib:GetActiveLayoutName()
-          local d = ns.DB.defaults
-          ns.DB:SetPosition(layoutName, d.point, d.relPoint, d.x, d.y)
-          ns.UI:ApplyPosition()
-        end,
+        click = function() ns.UI:ResetPosition() end,
       },
     })
   end
@@ -332,6 +325,16 @@ function ns.UI:ApplyPosition()
   local point, relPoint, x, y = ns.DB:GetPosition(layoutName)
   self.frame:ClearAllPoints()
   self.frame:SetPoint(point, UIParent, relPoint, x, y)
+end
+
+-- Back to the default position, for the active Edit Mode layout only so other
+-- HUD profiles keep theirs. Shared by the Edit Mode dialog and /ch config.
+function ns.UI:ResetPosition()
+  local lib = LibStub and LibStub("LibEditMode", true)
+  local layoutName = lib and lib:GetActiveLayoutName()
+  local d = ns.DB.defaults
+  ns.DB:SetPosition(layoutName, d.point, d.relPoint, d.x, d.y)
+  self:ApplyPosition()
 end
 
 function ns.UI:ApplyLayout()

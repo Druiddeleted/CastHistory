@@ -5,6 +5,9 @@ local _, ns = ...
 -- Mode selection dialog, and Options renders it as a config panel. Adding a
 -- setting means adding one entry here and nothing else.
 --
+-- label     keep it a short noun phrase: the native settings list truncates
+--           anything past ~28 characters. Explanations go in tooltip.
+-- tooltip   optional hover text in /ch config
 -- kind      slider | toggle | choice
 -- apply     what to run after a change: see APPLY below. nil = nothing to
 --           repaint (the setting only affects casts recorded from now on).
@@ -82,22 +85,26 @@ ns.Settings.schema = {
     editMode = true, panel = true,
   },
   {
-    key = "showBaseGCD", kind = "toggle", label = "Show base 1.5s GCD markers",
+    key = "showBaseGCD", kind = "toggle", label = "Base GCD markers",
+    tooltip = "Grey lines every 1.5s back from \"now\": the unhasted global cooldown.",
     default = true, apply = "layout",
     editMode = true, panel = true,
   },
   {
-    key = "showHastedGCD", kind = "toggle", label = "Show haste-adjusted GCD markers",
+    key = "showHastedGCD", kind = "toggle", label = "Hasted GCD markers",
+    tooltip = "Blue lines spaced by your current haste-adjusted global cooldown. In combat, when haste can't be read, they keep their last spacing.",
     default = true, apply = "layout",
     editMode = true, panel = true,
   },
   {
-    key = "showSpellNames", kind = "toggle", label = "Show spell names under icons",
+    key = "showSpellNames", kind = "toggle", label = "Spell names",
+    tooltip = "Show each spell's name under its icon. Horizontal timelines only.",
     default = false, apply = "layout",
     editMode = true, panel = true,
   },
   {
-    key = "hideInternal", kind = "toggle", label = "Hide internal/system spells you didn't cast",
+    key = "hideInternal", kind = "toggle", label = "Hide system spells",
+    tooltip = "Hide zone, quest and scenario effects the game fires on you that you didn't cast, such as \"[DNT] Player Inside WMO\". Vehicle and scenario abilities without a tooltip are hidden too.",
     default = true,
     editMode = true, panel = true,
   },
