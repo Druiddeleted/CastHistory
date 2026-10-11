@@ -38,8 +38,11 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          # Strip a leading "v" so "v0.1.4" matches "## 0.1.4" in CHANGELOG.md.
+          # Strip a leading "v" and any -alphaN/-betaN suffix so both "v0.1.4"
+          # and "0.1.8-alpha1" match "## 0.1.8" in CHANGELOG.md -- alpha and beta
+          # iterations share the release's single changelog section.
           VERSION="${TAG#v}"
+          VERSION="${VERSION%%-*}"
           awk -v ver="$VERSION" '
             /^## / {
               if (found) exit
